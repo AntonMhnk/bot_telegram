@@ -2,8 +2,7 @@ import TelegramBot from "node-telegram-bot-api";
 import "dotenv/config";
 
 const token = process.env.TG_BOT_API_KEY;
-const url = "t.me/NebulaHuntBot/NebulaHunt";
-const urlCom = "https://t.me/+ur3meeF_bOo1ZGRi";
+const urlCom = "https://t.me/+ur3meeF_bOo1ZGRi"; // community
 const photoPath = "./images/spaceImage.webp";
 
 const bot = new TelegramBot(token, { polling: true });
@@ -24,10 +23,16 @@ bot.on("message", async (msg) => {
 			caption: caption,
 			reply_markup: {
 				inline_keyboard: [
-					[{ text: "Open game!", url: url }],
+					[
+						{
+							text: "🪐 Open game!",
+							web_app: { url: "https://nebula-hunt.vercel.app/" },
+						},
+					],
 					[{ text: "Join community!", url: urlCom }],
 				],
 			},
 		});
 	}
 });
+// https://final-game-plum.vercel.app/
