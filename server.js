@@ -7,6 +7,7 @@ const fs = require("fs");
 const path = require("path");
 
 const app = express();
+const isDev = process.env.NODE_ENV !== "production";
 
 // Configure CORS with more detailed options
 app.use(
@@ -16,7 +17,7 @@ app.use(
 		allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
 		exposedHeaders: ["Content-Range", "X-Content-Range"],
 		credentials: true,
-		maxAge: 600, // Cache preflight request for 10 minutes
+		maxAge: 600,
 		preflightContinue: false,
 		optionsSuccessStatus: 204,
 	})
@@ -30,23 +31,34 @@ if (!process.env.TG_BOT_API_KEY) {
 }
 
 const token = process.env.TG_BOT_API_KEY;
-const urlCom = "https://t.me/+ur3meeF_bOo1ZGRi"; // community
+const urlCom = "https://t.me/+ur3meeF_bOo1ZGRi";
 const photoPath = path.join(__dirname, "images", "spaceImage.webp");
 
-// Check if photo exists
-if (!fs.existsSync(photoPath)) {
-	console.error(`Error: Photo file not found at ${photoPath}`);
-	process.exit(1);
-}
+// Cache the photo buffer
+const photoBuffer = fs.readFileSync(photoPath);
 
-// Initialize Telegram bot with error handling
+// Initialize Telegram bot with optimized settings
 let bot;
 try {
 	console.log("Initializing Telegram bot...");
-	bot = new TelegramBot(token, {
-		polling: true,
-		filepath: false, // Disable file download for faster response
-	});
+	const botOptions = {
+		webHook: isDev
+			? false
+			: {
+					port: process.env.PORT || 3000,
+			  },
+		polling: isDev,
+		filepath: false,
+	};
+
+	bot = new TelegramBot(token, botOptions);
+
+	if (!isDev) {
+		// Set webhook in production
+		const url = process.env.VERCEL_URL || "your-production-url.vercel.app";
+		bot.setWebHook(`https://${url}/webhook/${token}`);
+	}
+
 	console.log("Bot initialized successfully");
 
 	// Cache for welcome message
@@ -65,44 +77,21 @@ try {
 		},
 	};
 
-	// Pre-load the photo with proper options
-	const photo = {
-		source: fs.readFileSync(photoPath),
-		filename: "spaceImage.webp",
-	};
-
 	// Handle /start command with optimized response
 	bot.onText(/\/start/, async (msg) => {
 		const chatId = msg.chat.id;
-
 		try {
-			// Send "typing" action immediately
-			await bot.sendChatAction(chatId, "typing");
-
-			// Send photo and message in parallel
-			await Promise.all([
-				bot.sendPhoto(chatId, photo.source, {
-					caption: welcomeMessageCache.caption,
-					reply_markup: welcomeMessageCache.keyboard,
-					filename: photo.filename,
-				}),
-			]).catch((error) => {
-				console.error("Error sending welcome message:", error);
-				// Fallback to text-only message if photo fails
-				return bot.sendMessage(chatId, welcomeMessageCache.caption, {
-					reply_markup: welcomeMessageCache.keyboard,
-				});
+			await bot.sendPhoto(chatId, photoBuffer, {
+				caption: welcomeMessageCache.caption,
+				reply_markup: welcomeMessageCache.keyboard,
+				filename: "spaceImage.webp",
 			});
 		} catch (error) {
 			console.error("Error in /start command:", error);
 			await bot
-				.sendMessage(
-					chatId,
-					"Welcome to Nebula Hunt! Click the button below to start.",
-					{
-						reply_markup: welcomeMessageCache.keyboard,
-					}
-				)
+				.sendMessage(chatId, welcomeMessageCache.caption, {
+					reply_markup: welcomeMessageCache.keyboard,
+				})
 				.catch(console.error);
 		}
 	});
@@ -135,6 +124,12 @@ try {
 	console.error("Bot initialization error:", error);
 	process.exit(1);
 }
+
+// Webhook endpoint for production
+app.post(`/webhook/${token}`, (req, res) => {
+	bot.handleUpdate(req.body);
+	res.sendStatus(200);
+});
 
 // Store items
 const storeItems = [
