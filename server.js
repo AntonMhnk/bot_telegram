@@ -43,80 +43,92 @@ if (!fs.existsSync(photoPath)) {
 let bot;
 try {
 	console.log("Initializing Telegram bot...");
-	bot = new TelegramBot(token, { polling: true }); // Enable polling
+	bot = new TelegramBot(token, {
+		polling: true,
+		filepath: false, // Disable file download for faster response
+	});
 	console.log("Bot initialized successfully");
 
-	// Handle /start command
-	bot.onText(/\/start/, async (msg) => {
-		try {
-			console.log("Received /start command from:", msg.from.id);
-			const chatId = msg.chat.id;
-
-			// Check if photo exists
-			if (!fs.existsSync(photoPath)) {
-				console.error(`Error: Photo file not found at ${photoPath}`);
-				await bot.sendMessage(
-					chatId,
-					"Welcome to Nebula Hunt! The game is loading..."
-				);
-			} else {
-				console.log("Sending welcome message with photo");
-				const caption = `Welcome to Nebula Hunt! 🚀\n\nYou are about to embark on a journey through the unexplored corners of the universe.\n\nScan deep space, discover ancient planets, and build your own galactic legacy.\n\n🌌 Tap "Open game!" to begin your mission.\n\n🪐 Rare worlds await. Some… may even change everything.\n\nGood luck, Pioneer. The stars are watching.`;
-
-				await bot.sendPhoto(chatId, photoPath, {
-					caption: caption,
-					reply_markup: {
-						inline_keyboard: [
-							[
-								{
-									text: "🪐 Open game!",
-									web_app: {
-										url: "https://nebula-hunt.vercel.app/",
-									},
-								},
-							],
-							[{ text: "Join community!", url: urlCom }],
-						],
+	// Cache for welcome message
+	const welcomeMessageCache = {
+		caption: `Welcome to Nebula Hunt! 🚀\n\nYou are about to embark on a journey through the unexplored corners of the universe.\n\nScan deep space, discover ancient planets, and build your own galactic legacy.\n\n🌌 Tap "Open game!" to begin your mission.\n\n🪐 Rare worlds await. Some… may even change everything.\n\nGood luck, Pioneer. The stars are watching.`,
+		keyboard: {
+			inline_keyboard: [
+				[
+					{
+						text: "🪐 Open game!",
+						web_app: { url: "https://nebula-hunt.vercel.app/" },
 					},
+				],
+				[{ text: "Join community!", url: urlCom }],
+			],
+		},
+	};
+
+	// Pre-load the photo
+	const photo = fs.readFileSync(photoPath);
+
+	// Handle /start command with optimized response
+	bot.onText(/\/start/, async (msg) => {
+		const chatId = msg.chat.id;
+
+		try {
+			// Send "typing" action immediately
+			await bot.sendChatAction(chatId, "typing");
+
+			// Send photo and message in parallel
+			await Promise.all([
+				bot.sendPhoto(chatId, photo, {
+					caption: welcomeMessageCache.caption,
+					reply_markup: welcomeMessageCache.keyboard,
+				}),
+			]).catch((error) => {
+				console.error("Error sending welcome message:", error);
+				// Fallback to text-only message if photo fails
+				return bot.sendMessage(chatId, welcomeMessageCache.caption, {
+					reply_markup: welcomeMessageCache.keyboard,
 				});
-				console.log("Welcome message sent successfully");
-			}
+			});
 		} catch (error) {
-			console.error("Error handling /start command:", error);
-			try {
-				await bot.sendMessage(
-					msg.chat.id,
-					"Sorry, there was an error starting the game. Please try again."
-				);
-			} catch (sendError) {
-				console.error("Error sending error message:", sendError);
-			}
+			console.error("Error in /start command:", error);
+			await bot
+				.sendMessage(
+					chatId,
+					"Welcome to Nebula Hunt! Click the button below to start.",
+					{
+						reply_markup: welcomeMessageCache.keyboard,
+					}
+				)
+				.catch(console.error);
 		}
 	});
 
-	// Handle successful payments
+	// Handle successful payments with optimized response
 	bot.on("pre_checkout_query", async (query) => {
-		try {
-			await bot.answerPreCheckoutQuery(query.id, true);
-		} catch (error) {
-			console.error("Error handling pre-checkout query:", error);
-		}
+		await bot
+			.answerPreCheckoutQuery(query.id, true)
+			.catch((error) => console.error("Pre-checkout error:", error));
 	});
 
 	bot.on("successful_payment", async (msg) => {
 		try {
 			const payment = msg.successful_payment;
 			const payload = JSON.parse(payment.invoice_payload);
+
+			// Send "typing" action immediately
+			await bot.sendChatAction(msg.chat.id, "typing");
+
 			await bot.sendMessage(
 				msg.chat.id,
-				`🎉 Thank you for your purchase! You've received: ${payload.type}`
+				`🎉 Thank you for your purchase! You've received: ${payload.type}`,
+				{ parse_mode: "HTML" } // Enable HTML parsing for faster message rendering
 			);
 		} catch (error) {
-			console.error("Error handling successful payment:", error);
+			console.error("Payment confirmation error:", error);
 		}
 	});
 } catch (error) {
-	console.error("Error initializing Telegram bot:", error);
+	console.error("Bot initialization error:", error);
 	process.exit(1);
 }
 
