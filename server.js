@@ -65,8 +65,11 @@ try {
 		},
 	};
 
-	// Pre-load the photo
-	const photo = fs.readFileSync(photoPath);
+	// Pre-load the photo with proper options
+	const photo = {
+		source: fs.readFileSync(photoPath),
+		filename: "spaceImage.webp",
+	};
 
 	// Handle /start command with optimized response
 	bot.onText(/\/start/, async (msg) => {
@@ -78,9 +81,10 @@ try {
 
 			// Send photo and message in parallel
 			await Promise.all([
-				bot.sendPhoto(chatId, photo, {
+				bot.sendPhoto(chatId, photo.source, {
 					caption: welcomeMessageCache.caption,
 					reply_markup: welcomeMessageCache.keyboard,
+					filename: photo.filename,
 				}),
 			]).catch((error) => {
 				console.error("Error sending welcome message:", error);
