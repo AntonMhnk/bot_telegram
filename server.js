@@ -8,13 +8,17 @@ const path = require("path");
 
 const app = express();
 
-// Configure CORS
+// Configure CORS with more detailed options
 app.use(
 	cors({
-		origin: "*", // Allow all origins
-		methods: ["GET", "POST", "PUT", "DELETE"],
-		allowedHeaders: ["Content-Type", "Authorization"],
+		origin: "*",
+		methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+		allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
+		exposedHeaders: ["Content-Range", "X-Content-Range"],
 		credentials: true,
+		maxAge: 600, // Cache preflight request for 10 minutes
+		preflightContinue: false,
+		optionsSuccessStatus: 204,
 	})
 );
 app.use(bodyParser.json());
@@ -38,7 +42,79 @@ if (!fs.existsSync(photoPath)) {
 // Initialize Telegram bot with error handling
 let bot;
 try {
-	bot = new TelegramBot(token, { polling: false });
+	console.log("Initializing Telegram bot...");
+	bot = new TelegramBot(token, { polling: true }); // Enable polling
+	console.log("Bot initialized successfully");
+
+	// Handle /start command
+	bot.onText(/\/start/, async (msg) => {
+		try {
+			console.log("Received /start command from:", msg.from.id);
+			const chatId = msg.chat.id;
+
+			// Check if photo exists
+			if (!fs.existsSync(photoPath)) {
+				console.error(`Error: Photo file not found at ${photoPath}`);
+				await bot.sendMessage(
+					chatId,
+					"Welcome to Nebula Hunt! The game is loading..."
+				);
+			} else {
+				console.log("Sending welcome message with photo");
+				const caption = `Welcome to Nebula Hunt! 🚀\n\nYou are about to embark on a journey through the unexplored corners of the universe.\n\nScan deep space, discover ancient planets, and build your own galactic legacy.\n\n🌌 Tap "Open game!" to begin your mission.\n\n🪐 Rare worlds await. Some… may even change everything.\n\nGood luck, Pioneer. The stars are watching.`;
+
+				await bot.sendPhoto(chatId, photoPath, {
+					caption: caption,
+					reply_markup: {
+						inline_keyboard: [
+							[
+								{
+									text: "🪐 Open game!",
+									web_app: {
+										url: "https://nebula-hunt.vercel.app/",
+									},
+								},
+							],
+							[{ text: "Join community!", url: urlCom }],
+						],
+					},
+				});
+				console.log("Welcome message sent successfully");
+			}
+		} catch (error) {
+			console.error("Error handling /start command:", error);
+			try {
+				await bot.sendMessage(
+					msg.chat.id,
+					"Sorry, there was an error starting the game. Please try again."
+				);
+			} catch (sendError) {
+				console.error("Error sending error message:", sendError);
+			}
+		}
+	});
+
+	// Handle successful payments
+	bot.on("pre_checkout_query", async (query) => {
+		try {
+			await bot.answerPreCheckoutQuery(query.id, true);
+		} catch (error) {
+			console.error("Error handling pre-checkout query:", error);
+		}
+	});
+
+	bot.on("successful_payment", async (msg) => {
+		try {
+			const payment = msg.successful_payment;
+			const payload = JSON.parse(payment.invoice_payload);
+			await bot.sendMessage(
+				msg.chat.id,
+				`🎉 Thank you for your purchase! You've received: ${payload.type}`
+			);
+		} catch (error) {
+			console.error("Error handling successful payment:", error);
+		}
+	});
 } catch (error) {
 	console.error("Error initializing Telegram bot:", error);
 	process.exit(1);
@@ -161,85 +237,20 @@ app.post("/api/create-payment", async (req, res) => {
 	}
 });
 
-// Handle incoming messages with error handling
-bot.on("message", async (msg) => {
-	try {
-		const chatId = msg.chat.id;
-		const text = msg.text;
-		const firstName = msg.from.first_name;
-		const lastName = msg.from.last_name;
-		const username = msg.from.username;
-		const id = msg.from.id;
-		const is_bot = msg.from.is_bot;
-
-		const caption = `You are about to embark on a journey through the unexplored corners of the universe.\n\nScan deep space, discover ancient planets, and build your own galactic legacy.\n\n🌌 Tap "Open game!" to begin your mission.\n\n🪐 Rare worlds await. Some… may even change everything.\n\nGood luck, Pioneer. The stars are watching.`;
-
-		if (text === "/start") {
-			await bot.sendPhoto(chatId, photoPath, {
-				caption: caption,
-				reply_markup: {
-					inline_keyboard: [
-						[
-							{
-								text: "🪐 Open game!",
-								web_app: { url: "https://nebula-hunt.vercel.app/" },
-							},
-						],
-						[{ text: "Join community!", url: urlCom }],
-					],
-				},
-			});
-		}
-	} catch (error) {
-		console.error("Error handling message:", error);
-		// Attempt to send error message to user
-		try {
-			await bot.sendMessage(
-				msg.chat.id,
-				"Sorry, something went wrong. Please try again later."
-			);
-		} catch (sendError) {
-			console.error("Error sending error message:", sendError);
-		}
-	}
-});
-
-// Handle successful payments
-bot.on("pre_checkout_query", async (query) => {
-	try {
-		await bot.answerPreCheckoutQuery(query.id, true);
-	} catch (error) {
-		console.error("Error handling pre-checkout query:", error);
-	}
-});
-
-bot.on("successful_payment", async (msg) => {
-	try {
-		const payment = msg.successful_payment;
-		const payload = JSON.parse(payment.invoice_payload);
-
-		// Here you would typically:
-		// 1. Update user's inventory
-		// 2. Send confirmation message
-		// 3. Log the transaction
-
-		await bot.sendMessage(
-			msg.chat.id,
-			`�� Thank you for your purchase! You've received: ${payload.type}`
-		);
-	} catch (error) {
-		console.error("Error handling successful payment:", error);
-	}
-});
-
-// Error handling middleware
+// Add error handling middleware
 app.use((err, req, res, next) => {
-	console.error("Unhandled error:", err);
+	console.error("Error:", err);
 	res.status(500).json({
 		success: false,
-		error: "Internal server error",
-		message: process.env.NODE_ENV === "development" ? err.message : undefined,
+		error: err.message || "Internal server error",
+		stack: process.env.NODE_ENV === "development" ? err.stack : undefined,
 	});
+});
+
+// Add request logging middleware
+app.use((req, res, next) => {
+	console.log(`${new Date().toISOString()} - ${req.method} ${req.url}`);
+	next();
 });
 
 // Handle unhandled promise rejections
@@ -252,6 +263,20 @@ process.on("uncaughtException", (error) => {
 	console.error("Uncaught Exception:", error);
 	process.exit(1);
 });
+
+// Start the server if this file is run directly
+if (require.main === module) {
+	const PORT = process.env.PORT || 3000;
+	const HOST = "0.0.0.0"; // Listen on all network interfaces
+
+	app.listen(PORT, HOST, () => {
+		console.log(`Server is running on http://${HOST}:${PORT}`);
+		console.log(
+			`Store API available at: http://${HOST}:${PORT}/api/store-items`
+		);
+		console.log("Press Ctrl+C to stop the server");
+	});
+}
 
 // Export the Express API
 module.exports = app;
