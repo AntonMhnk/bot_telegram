@@ -11,7 +11,7 @@ const app = express();
 // Configure CORS
 app.use(
 	cors({
-		origin: ["https://t.me", "https://nebula-hunt.vercel.app"],
+		origin: "*", // Allow all origins
 		methods: ["GET", "POST", "PUT", "DELETE"],
 		allowedHeaders: ["Content-Type", "Authorization"],
 		credentials: true,
@@ -48,47 +48,57 @@ try {
 const storeItems = [
 	{
 		id: 1,
-		name: "Premium Skin",
-		description: "Exclusive character skin",
+		name: "Space Explorer Pack",
+		description: "Unlock special space exploration features",
 		stars: 100,
-		image: "🎮",
+		image: "🚀",
+		type: "pack",
 	},
 	{
 		id: 2,
-		name: "Power Boost",
-		description: "Temporary power boost for 24 hours",
+		name: "Cosmic Boost",
+		description: "Temporary speed boost for your spaceship",
 		stars: 50,
 		image: "⚡",
+		type: "boost",
 	},
 	{
 		id: 3,
-		name: "Special Weapon",
-		description: "Rare weapon with special abilities",
+		name: "Galactic Weapon",
+		description: "Powerful weapon for space battles",
 		stars: 200,
-		image: "🔫",
+		image: "��",
+		type: "weapon",
 	},
 	{
 		id: 4,
-		name: "VIP Status",
-		description: "VIP status for 30 days",
+		name: "VIP Explorer",
+		description: "VIP status with exclusive benefits",
 		stars: 150,
 		image: "👑",
+		type: "status",
 	},
 ];
 
 // Get store items with invoice links
 app.get("/api/store-items", async (req, res) => {
+	console.log("Received request for store items");
 	try {
+		console.log("Available store items:", storeItems);
 		const itemsWithInvoiceLinks = await Promise.all(
 			storeItems.map(async (item) => {
 				try {
+					console.log(`Creating invoice link for item: ${item.name}`);
 					const invoiceLink = await bot.createInvoiceLink(
-						item.name, // title
-						item.description, // description
-						"{}", // payload - must be empty for Stars
-						"", // provider_token - must be empty for Stars
-						"XTR", // currency - must be XTR for Stars
-						[{ amount: item.stars, label: `${item.stars} Stars` }] // prices
+						item.name,
+						item.description,
+						JSON.stringify({ itemId: item.id, type: item.type }),
+						"",
+						"XTR",
+						[{ amount: item.stars, label: `${item.stars} Stars` }]
+					);
+					console.log(
+						`Invoice link created for ${item.name}: ${invoiceLink}`
 					);
 					return {
 						...item,
@@ -107,6 +117,7 @@ app.get("/api/store-items", async (req, res) => {
 			})
 		);
 
+		console.log("Sending response with items:", itemsWithInvoiceLinks);
 		res.json({ success: true, items: itemsWithInvoiceLinks });
 	} catch (error) {
 		console.error("Error getting store items:", error);
@@ -190,6 +201,34 @@ bot.on("message", async (msg) => {
 		} catch (sendError) {
 			console.error("Error sending error message:", sendError);
 		}
+	}
+});
+
+// Handle successful payments
+bot.on("pre_checkout_query", async (query) => {
+	try {
+		await bot.answerPreCheckoutQuery(query.id, true);
+	} catch (error) {
+		console.error("Error handling pre-checkout query:", error);
+	}
+});
+
+bot.on("successful_payment", async (msg) => {
+	try {
+		const payment = msg.successful_payment;
+		const payload = JSON.parse(payment.invoice_payload);
+
+		// Here you would typically:
+		// 1. Update user's inventory
+		// 2. Send confirmation message
+		// 3. Log the transaction
+
+		await bot.sendMessage(
+			msg.chat.id,
+			`�� Thank you for your purchase! You've received: ${payload.type}`
+		);
+	} catch (error) {
+		console.error("Error handling successful payment:", error);
 	}
 });
 
