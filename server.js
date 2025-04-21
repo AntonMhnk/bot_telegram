@@ -3,8 +3,6 @@ const express = require("express");
 const cors = require("cors");
 const bodyParser = require("body-parser");
 const TelegramBot = require("node-telegram-bot-api");
-const fs = require("fs");
-const path = require("path");
 
 const app = express();
 
@@ -20,10 +18,7 @@ app.use(bodyParser.json());
 
 const token = process.env.TG_BOT_API_KEY;
 const urlCom = "https://t.me/+ur3meeF_bOo1ZGRi";
-const photoPath = path.join(__dirname, "images", "spaceImage.webp");
-
-// Cache the photo buffer
-const photoBuffer = fs.readFileSync(photoPath);
+const photoPath = "./images/spaceImage.webp";
 
 // Initialize Telegram bot with optimized settings
 const bot = new TelegramBot(token, { polling: true });
@@ -31,16 +26,11 @@ const bot = new TelegramBot(token, { polling: true });
 bot.on("message", async (msg) => {
 	const chatId = msg.chat.id;
 	const text = msg.text;
-	const firstName = msg.from.first_name;
-	const lastName = msg.from.last_name;
-	const username = msg.from.username;
-	const id = msg.from.id;
-	const is_bot = msg.from.is_bot;
 
 	const caption = `Welcome to Nebula Hunt! 🚀\n\nYou are about to embark on a journey through the unexplored corners of the universe.\n\nScan deep space, discover ancient planets, and build your own galactic legacy.\n\n🌌 Tap "Open game!" to begin your mission.\n\n🪐 Rare worlds await. Some… may even change everything.\n\nGood luck, Pioneer. The stars are watching.`;
 
 	if (text === "/start") {
-		await bot.sendPhoto(chatId, photoBuffer, {
+		await bot.sendPhoto(chatId, photoPath, {
 			caption: caption,
 			reply_markup: {
 				inline_keyboard: [
@@ -65,7 +55,6 @@ const storeItems = [
 		description: "Unlock special space exploration features",
 		stars: 100,
 		image: "🚀",
-		type: "pack",
 	},
 	{
 		id: 2,
@@ -73,7 +62,6 @@ const storeItems = [
 		description: "Temporary speed boost for your spaceship",
 		stars: 50,
 		image: "⚡",
-		type: "boost",
 	},
 	{
 		id: 3,
@@ -81,7 +69,6 @@ const storeItems = [
 		description: "Powerful weapon for space battles",
 		stars: 200,
 		image: "��",
-		type: "weapon",
 	},
 	{
 		id: 4,
@@ -89,7 +76,6 @@ const storeItems = [
 		description: "VIP status with exclusive benefits",
 		stars: 150,
 		image: "👑",
-		type: "status",
 	},
 ];
 
