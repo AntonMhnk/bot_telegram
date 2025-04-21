@@ -125,29 +125,42 @@ app.post("/api/create-payment", async (req, res) => {
 	try {
 		const { amount, description } = req.body;
 
+		// Validate amount
+		if (!amount || amount < 1 || amount > 10000) {
+			return res.status(400).json({
+				success: false,
+				error: "Invalid amount. Must be between 1 and 10,000 stars.",
+			});
+		}
+
 		console.log("Creating invoice with data:", { amount, description });
 
 		// Create invoice link for Telegram Stars payment
 		const invoiceLink = await bot.createInvoiceLink(
-			"Title", // title
-			"Some description", // description
+			"Buy Stars", // title
+			`Purchase ${amount} stars to expand your galaxy`, // description
 			"{}", // payload - must be empty for Stars
 			"", // provider_token - must be empty for Stars
 			"XTR", // currency - must be XTR for Stars
-			[{ amount: amount, label: description || "Stars" }] // prices
+			[
+				{
+					amount: amount,
+					label: `${amount} ${amount === 1 ? "Star" : "Stars"}`,
+				},
+			] // prices
 		);
 
 		console.log("Invoice link created successfully:", invoiceLink);
 		res.json({ success: true, invoiceLink });
 	} catch (error) {
-		console.error("Detailed error creating payment:", {
+		console.error("Error creating payment:", {
 			message: error.message,
 			stack: error.stack,
 			response: error.response?.data,
 		});
 		res.status(500).json({
 			success: false,
-			error: error.message,
+			error: "Failed to create payment. Please try again.",
 			details: error.response?.data || "No additional details available",
 		});
 	}
