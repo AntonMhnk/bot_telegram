@@ -37,7 +37,7 @@ bot.on("message", async (msg) => {
 	const id = msg.from.id;
 	const is_bot = msg.from.is_bot;
 
-	const caption = `Welcome to my bot: ${firstName} ${lastName}!\n\nUserName: ${username};\nid: ${id};\n_bot?:${is_bot}_`;
+	const caption = `Welcome to Nebula Hunt! 🚀\n\nYou are about to embark on a journey through the unexplored corners of the universe.\n\nScan deep space, discover ancient planets, and build your own galactic legacy.\n\n🌌 Tap "Open game!" to begin your mission.\n\n🪐 Rare worlds await. Some… may even change everything.\n\nGood luck, Pioneer. The stars are watching.`;
 
 	if (text === "/start") {
 		await bot.sendPhoto(chatId, photoBuffer, {
