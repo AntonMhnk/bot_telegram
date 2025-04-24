@@ -33,7 +33,7 @@ bot.on("message", async (msg) => {
 
 	if (text === "/start") {
 		try {
-			const webAppUrl = `https://t.me/${botUsername}/${myAppName}`;
+			const webAppUrl = `https://t.me/${botUsername}/${myAppName}?startapp=ABC`;
 			await bot.sendPhoto(chatId, photoPath, {
 				caption: caption,
 				reply_markup: {
