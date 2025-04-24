@@ -37,7 +37,7 @@ bot.on("message", async (msg) => {
 					[
 						{
 							text: "🪐 Open game!",
-							web_app: { url: "https://nebula-hunt.vercel.app/" },
+							web_app: { url: "https://t.me/NebulaHuntBot/myapp" },
 						},
 					],
 					[{ text: "Join community!", url: urlCom }],
