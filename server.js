@@ -19,6 +19,8 @@ app.use(bodyParser.json());
 const token = process.env.TG_BOT_API_KEY;
 const urlCom = "https://t.me/+ur3meeF_bOo1ZGRi";
 const photoPath = "./images/spaceImage.webp";
+const botUsername = "NebulaHuntBot"; // Add your bot username
+const myAppName = "myapp";
 
 // Initialize Telegram bot with optimized settings
 const bot = new TelegramBot(token, { polling: true });
@@ -30,20 +32,29 @@ bot.on("message", async (msg) => {
 	const caption = `Welcome to Nebula Hunt! 🚀\n\nYou are about to embark on a journey through the unexplored corners of the universe.\n\nScan deep space, discover ancient planets, and build your own galactic legacy.\n\n🌌 Tap "Open game!" to begin your mission.\n\n🪐 Rare worlds await. Some… may even change everything.\n\nGood luck, Pioneer. The stars are watching.`;
 
 	if (text === "/start") {
-		await bot.sendPhoto(chatId, photoPath, {
-			caption: caption,
-			reply_markup: {
-				inline_keyboard: [
-					[
-						{
-							text: "🪐 Open game!",
-							web_app: { url: "https://t.me/NebulaHuntBot/myapp" },
-						},
+		try {
+			const webAppUrl = `https://t.me/${botUsername}/${myAppName}`;
+			await bot.sendPhoto(chatId, photoPath, {
+				caption: caption,
+				reply_markup: {
+					inline_keyboard: [
+						[
+							{
+								text: "🪐 Open game!",
+								url: webAppUrl, // Changed from web_app to url for deep link
+							},
+						],
+						[{ text: "Join community!", url: urlCom }],
 					],
-					[{ text: "Join community!", url: urlCom }],
-				],
-			},
-		});
+				},
+			});
+		} catch (error) {
+			console.error("Error sending start message:", error);
+			await bot.sendMessage(
+				chatId,
+				"Welcome to Nebula Hunt! Please try opening the game again."
+			);
+		}
 	}
 });
 
