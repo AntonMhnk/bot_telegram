@@ -48,9 +48,9 @@ exports.signin = async (req, res) => {
 		// Set cookies
 		res.cookie("access_token", accessToken, {
 			httpOnly: true,
-			secure: process.env.NODE_ENV === "production",
-			sameSite: "strict",
-			maxAge: 3600000, // 1 hour
+			secure: false,
+			sameSite: "lax",
+			maxAge: 3600000,
 		});
 
 		res.cookie("refresh_token", refreshToken, {

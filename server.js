@@ -17,8 +17,8 @@ app.use(
 				? process.env.CLIENT_URL
 				: "http://localhost:5173",
 		credentials: true,
-		methods: ["GET", "POST", "OPTIONS"],
-		allowedHeaders: ["Content-Type"],
+		methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+		allowedHeaders: ["Content-Type", "Authorization"],
 	})
 );
 app.use(bodyParser.json());
