@@ -18,7 +18,7 @@ app.use(bodyParser.json());
 
 const token = process.env.TG_BOT_API_KEY;
 const urlCom = "https://t.me/+ur3meeF_bOo1ZGRi";
-const photoPath = "./images/spaceImage.webp";
+const photoPath = "./images/spaceImage.y";
 const botUsername = "NebulaHuntBot"; // Add your bot username
 const myAppName = "myapp";
 
