@@ -1,8 +1,34 @@
-const { isValid } = require("@telegram-apps/init-data-node");
+const { parse, isValid } = require("@telegram-apps/init-data-node");
 const jwt = require("jsonwebtoken");
+const config = require("../config/config"); // Import config
 
-const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
-const JWT_SECRET = process.env.JWT_SECRET;
+// Use secrets from config
+const BOT_TOKEN = config.telegramBotToken;
+const JWT_ACCESS_SECRET = config.jwtAccessSecret;
+const JWT_REFRESH_SECRET = config.jwtRefreshSecret;
+
+const ACCESS_TOKEN_EXPIRY = "15m"; // Example: Access token lasts 15 minutes
+const REFRESH_TOKEN_EXPIRY = "7d"; // Example: Refresh token lasts 7 days
+
+// Helper to set cookies
+const setAuthCookies = (res, accessToken, refreshToken) => {
+	const cookieOptions = {
+		httpOnly: true,
+		secure: config.nodeEnv === "production", // Use nodeEnv from config
+		path: "/",
+		sameSite: "Strict", // Use 'Strict' or 'Lax'. 'None' requires secure=true.
+	};
+
+	res.cookie("access_token", accessToken, {
+		...cookieOptions,
+		maxAge: 1000 * 60 * 15, // 15 minutes in ms
+	});
+
+	res.cookie("refresh_token", refreshToken, {
+		...cookieOptions,
+		maxAge: 1000 * 60 * 60 * 24 * 7, // 7 days in ms
+	});
+};
 
 exports.signin = async (req, res) => {
 	try {
@@ -14,53 +40,57 @@ exports.signin = async (req, res) => {
 				.json({ success: false, error: "No initData provided" });
 		}
 
-		// Validate Telegram initData
-		const isValidData = isValid(initData, BOT_TOKEN);
-		if (!isValidData) {
+		if (!BOT_TOKEN || !JWT_ACCESS_SECRET || !JWT_REFRESH_SECRET) {
+			console.error("Missing required environment variables for auth!");
+			return res
+				.status(500)
+				.json({ success: false, error: "Server configuration error" });
+		}
+
+		// 1. Validate initData
+		try {
+			await isValid(initData, BOT_TOKEN);
+		} catch (error) {
+			console.error("Invalid initData:", error.message);
 			return res
 				.status(401)
 				.json({ success: false, error: "Invalid initData" });
 		}
 
-		// Parse initData to get user info
-		const userData = new URLSearchParams(initData);
-		const user = JSON.parse(userData.get("user"));
+		// 2. Parse user data
+		const parsedData = parse(initData);
+		const user = parsedData.user;
 
-		if (!user) {
+		if (!user || !user.id) {
+			console.error("Could not parse user from initData");
 			return res
 				.status(400)
-				.json({ success: false, error: "No user data found" });
+				.json({ success: false, error: "Invalid user data in initData" });
 		}
 
-		// Generate JWT tokens
-		const accessToken = jwt.sign(
-			{ id: user.id, username: user.username },
-			JWT_SECRET,
-			{ expiresIn: "1h" }
-		);
+		// TODO: Here you would typically find or create the user in your database
+		// const dbUser = await findOrCreateUserByTgId(user.id, user);
+		// For now, just use the parsed user data directly
+		const userDataForToken = {
+			id: user.id, // Use Telegram ID as primary ID for now
+			tg_id: user.id,
+			username: user.username,
+			// Add any other relevant user fields or roles from your DB user if applicable
+		};
 
-		const refreshToken = jwt.sign(
-			{ id: user.id, username: user.username },
-			JWT_SECRET,
-			{ expiresIn: "7d" }
-		);
-
-		// Set cookies
-		res.cookie("access_token", accessToken, {
-			httpOnly: true,
-			secure: false,
-			sameSite: "lax",
-			maxAge: 3600000,
+		// 3. Generate JWT tokens
+		const accessToken = jwt.sign(userDataForToken, JWT_ACCESS_SECRET, {
+			expiresIn: ACCESS_TOKEN_EXPIRY,
+		});
+		const refreshToken = jwt.sign(userDataForToken, JWT_REFRESH_SECRET, {
+			expiresIn: REFRESH_TOKEN_EXPIRY,
 		});
 
-		res.cookie("refresh_token", refreshToken, {
-			httpOnly: true,
-			secure: process.env.NODE_ENV === "production",
-			sameSite: "strict",
-			maxAge: 604800000, // 7 days
-		});
+		// 4. Set cookies
+		setAuthCookies(res, accessToken, refreshToken);
 
-		res.json({ success: true, user });
+		// 5. Send success response (including user info)
+		res.json({ success: true, user: userDataForToken });
 	} catch (error) {
 		console.error("Signin error:", error);
 		res.status(500).json({ success: false, error: "Internal server error" });
@@ -75,57 +105,66 @@ exports.protectedRoute = async (req, res) => {
 		if (!accessToken && !refreshToken) {
 			return res
 				.status(401)
-				.json({ success: false, error: "No tokens provided" });
+				.json({ success: false, error: "Authentication required" });
+		}
+
+		// 1. Try verifying the access token
+		try {
+			const decoded = jwt.verify(accessToken, JWT_ACCESS_SECRET);
+			// Access token is valid, return user data
+			return res.json({ success: true, user: decoded });
+		} catch (error) {
+			// Access token is invalid or expired, proceed to check refresh token
+			if (
+				error.name !== "TokenExpiredError" &&
+				error.name !== "JsonWebTokenError"
+			) {
+				console.error("Access token verification error:", error);
+				// Unexpected error
+			}
+		}
+
+		// 2. Access token failed, try verifying the refresh token
+		if (!refreshToken) {
+			return res.status(401).json({
+				success: false,
+				error: "Session expired, please re-authenticate",
+			});
 		}
 
 		try {
-			// Try to verify access token
-			const decoded = jwt.verify(accessToken, JWT_SECRET);
-			return res.json({ success: true, user: decoded });
+			const decoded = jwt.verify(refreshToken, JWT_REFRESH_SECRET);
+
+			// Refresh token is valid, issue new tokens
+			const userDataForToken = {
+				id: decoded.id,
+				tg_id: decoded.tg_id,
+				username: decoded.username,
+				// roles: decoded.roles // Include roles if they are in the token
+			};
+
+			const newAccessToken = jwt.sign(userDataForToken, JWT_ACCESS_SECRET, {
+				expiresIn: ACCESS_TOKEN_EXPIRY,
+			});
+			const newRefreshToken = jwt.sign(userDataForToken, JWT_REFRESH_SECRET, {
+				expiresIn: REFRESH_TOKEN_EXPIRY,
+			});
+
+			// Set new cookies
+			setAuthCookies(res, newAccessToken, newRefreshToken);
+
+			// Return user data with success
+			return res.json({ success: true, user: userDataForToken });
 		} catch (error) {
-			// If access token is invalid, try to refresh
-			if (refreshToken) {
-				try {
-					const decoded = jwt.verify(refreshToken, JWT_SECRET);
-
-					// Generate new tokens
-					const newAccessToken = jwt.sign(
-						{ id: decoded.id, username: decoded.username },
-						JWT_SECRET,
-						{ expiresIn: "1h" }
-					);
-
-					const newRefreshToken = jwt.sign(
-						{ id: decoded.id, username: decoded.username },
-						JWT_SECRET,
-						{ expiresIn: "7d" }
-					);
-
-					// Set new cookies
-					res.cookie("access_token", newAccessToken, {
-						httpOnly: true,
-						secure: process.env.NODE_ENV === "production",
-						sameSite: "strict",
-						maxAge: 3600000,
-					});
-
-					res.cookie("refresh_token", newRefreshToken, {
-						httpOnly: true,
-						secure: process.env.NODE_ENV === "production",
-						sameSite: "strict",
-						maxAge: 604800000,
-					});
-
-					return res.json({ success: true, user: decoded });
-				} catch (error) {
-					return res
-						.status(401)
-						.json({ success: false, error: "Invalid refresh token" });
-				}
-			}
-			return res
-				.status(401)
-				.json({ success: false, error: "Invalid access token" });
+			// Refresh token is also invalid
+			console.error("Refresh token verification failed:", error);
+			// Clear potentially invalid cookies
+			res.clearCookie("access_token");
+			res.clearCookie("refresh_token");
+			return res.status(401).json({
+				success: false,
+				error: "Session expired, please re-authenticate",
+			});
 		}
 	} catch (error) {
 		console.error("Protected route error:", error);

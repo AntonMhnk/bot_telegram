@@ -5,7 +5,6 @@ const bodyParser = require("body-parser");
 const cookieParser = require("cookie-parser");
 const TelegramBot = require("node-telegram-bot-api");
 const { signin, protectedRoute } = require("./src/controllers/auth.controller");
-const { verifyToken } = require("./src/middleware/auth.middleware");
 
 const app = express();
 
@@ -26,7 +25,7 @@ app.use(cookieParser());
 
 const token = process.env.TG_BOT_API_KEY;
 const urlCom = "https://t.me/+ur3meeF_bOo1ZGRi";
-const photoPath = "./images/spaceImage.y";
+const photoPath = "./images/spaceImage.webp";
 const botUsername = "NebulaHuntBot"; // Add your bot username
 const myAppName = "myapp";
 
@@ -35,7 +34,7 @@ const bot = new TelegramBot(token, { polling: true });
 
 // Authentication routes
 app.post("/auth/signin", signin);
-app.get("/auth/protected", verifyToken, protectedRoute);
+app.get("/auth/protected", protectedRoute);
 
 bot.on("message", async (msg) => {
 	const chatId = msg.chat.id;
