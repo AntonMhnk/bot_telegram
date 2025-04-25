@@ -2,19 +2,27 @@ require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
 const bodyParser = require("body-parser");
+const cookieParser = require("cookie-parser");
 const TelegramBot = require("node-telegram-bot-api");
+const { signin, protectedRoute } = require("./src/controllers/auth.controller");
+const { verifyToken } = require("./src/middleware/auth.middleware");
 
 const app = express();
 
 // Configure CORS with more detailed options
 app.use(
 	cors({
-		origin: "*", // Allow all origins
+		origin:
+			process.env.NODE_ENV === "production"
+				? process.env.CLIENT_URL
+				: "http://localhost:5173",
+		credentials: true,
 		methods: ["GET", "POST", "OPTIONS"],
 		allowedHeaders: ["Content-Type"],
 	})
 );
 app.use(bodyParser.json());
+app.use(cookieParser());
 
 const token = process.env.TG_BOT_API_KEY;
 const urlCom = "https://t.me/+ur3meeF_bOo1ZGRi";
@@ -24,6 +32,10 @@ const myAppName = "myapp";
 
 // Initialize Telegram bot with optimized settings
 const bot = new TelegramBot(token, { polling: true });
+
+// Authentication routes
+app.post("/auth/signin", signin);
+app.get("/auth/protected", verifyToken, protectedRoute);
 
 bot.on("message", async (msg) => {
 	const chatId = msg.chat.id;
@@ -175,6 +187,12 @@ app.post("/api/create-payment", async (req, res) => {
 			details: error.response?.data || "No additional details available",
 		});
 	}
+});
+
+// Error handling middleware
+app.use((err, req, res, next) => {
+	console.error(err.stack);
+	res.status(500).json({ success: false, error: "Something went wrong!" });
 });
 
 // Handle OPTIONS requests for CORS
