@@ -180,5 +180,10 @@ app.post("/api/create-payment", async (req, res) => {
 // Handle OPTIONS requests for CORS
 app.options("*", cors());
 
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+	console.log(`Server running on port ${PORT}`);
+});
+
 // Export the Express API
 module.exports = app;
