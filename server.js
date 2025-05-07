@@ -137,10 +137,10 @@ app.post("/api/create-payment", async (req, res) => {
 		const { amount, description } = req.body;
 
 		// Validate amount
-		if (!amount || amount < 1 || amount > 10000) {
+		if (!amount || amount < 1 || amount > 100000) {
 			return res.status(400).json({
 				success: false,
-				error: "Invalid amount. Must be between 1 and 10,000 stars.",
+				error: "Invalid amount. Must be between 1 and 100,000 stars.",
 			});
 		}
 
