@@ -28,8 +28,45 @@ const bot = new TelegramBot(token, { polling: true });
 bot.on("message", async (msg) => {
 	const chatId = msg.chat.id;
 	const text = msg.text;
+	const userLanguage = msg.from?.language_code || "en";
 
-	const caption = `Welcome to Nebula Hunt! 🚀\n\nYou are about to embark on a journey through the unexplored corners of the universe.\n\nScan deep space, discover ancient planets, and build your own galactic legacy.\n\n🌌 Tap "Open game!" to begin your mission.\n\n🪐 Rare worlds await. Some… may even change everything.\n\nGood luck, Pioneer. The stars are watching.`;
+	// Prepare captions for different languages
+	const captions = {
+		en: `Welcome to Nebula Hunt! 🚀\n\nYou are about to embark on a journey through the unexplored corners of the universe.\n\nScan deep space, discover ancient planets, and build your own galactic legacy.\n\n🌌 Tap "Open game!" to begin your mission.\n\n🪐 Rare worlds await. Some… may even change everything.\n\nGood luck, Pioneer. The stars are watching.`,
+		ru: `Добро пожаловать в Nebula Hunt! 🚀\n\nВы готовы отправиться в путешествие по неизведанным уголкам вселенной.\n\nСканируйте глубокий космос, открывайте древние планеты и создавайте своё галактическое наследие.\n\n🌌 Нажмите "Открыть игру!", чтобы начать миссию.\n\n🪐 Редкие миры ждут. Некоторые... могут даже изменить всё.\n\nУдачи, Первопроходец. Звёзды наблюдают за вами.`,
+	};
+
+	// Prepare button text for different languages
+	const buttonTexts = {
+		en: {
+			openGame: "🪐 Open game!",
+			joinCommunity: "Join community!",
+		},
+		ru: {
+			openGame: "🪐 Открыть игру!",
+			joinCommunity: "Присоединиться к сообществу!",
+		},
+	};
+
+	// Get the appropriate caption and button texts based on user language
+	const caption = captions[userLanguage] || captions.en;
+	const buttonText = buttonTexts[userLanguage] || buttonTexts.en;
+
+	// Prepare referral messages for different languages
+	const referralMessages = {
+		en: {
+			invitedUser:
+				"🎁 You were invited by a friend! Open the game to receive your welcome bonus of 5,000 Stardust and 10 Dark Matter!",
+			referrer:
+				"🎉 Great news! Someone joined using your referral link. You'll receive your reward of 5,000 Stardust and 10 Dark Matter when they open the game!",
+		},
+		ru: {
+			invitedUser:
+				"🎁 Вас пригласил друг! Откройте игру, чтобы получить приветственный бонус в размере 5,000 Звездной пыли и 10 Темной материи!",
+			referrer:
+				"🎉 Отличные новости! Кто-то присоединился по вашей реферальной ссылке. Вы получили награду: 5,000 звездной пыли и 10 темной материи!",
+		},
+	};
 
 	if (text && text.startsWith("/start")) {
 		try {
@@ -46,7 +83,7 @@ bot.on("message", async (msg) => {
 					isReferral = true;
 					referrerId = startParam.substring(4);
 					console.log(
-						`Referral detected! User ${chatId} was referred by ${referrerId}`
+						`Referral detected! User ${chatId} was referred by ${referrerId}. User language: ${userLanguage}`
 					);
 
 					// Here you would store this referral in your database
@@ -63,27 +100,44 @@ bot.on("message", async (msg) => {
 					inline_keyboard: [
 						[
 							{
-								text: "🪐 Open game!",
+								text: buttonText.openGame,
 								url: webAppUrl,
 							},
 						],
-						[{ text: "Join community!", url: urlCom }],
+						[{ text: buttonText.joinCommunity, url: urlCom }],
 					],
 				},
 			});
 
 			// If this was a referral, send additional messages
 			if (isReferral) {
-				await bot.sendMessage(
-					chatId,
-					"🎁 You were invited by a friend! Open the game to receive your welcome bonus of 5,000 Stardust and 10 Dark Matter!"
-				);
+				// Get appropriate message based on user language
+				const invitedUserMessage =
+					referralMessages[userLanguage]?.invitedUser ||
+					referralMessages.en.invitedUser;
+
+				await bot.sendMessage(chatId, invitedUserMessage);
 
 				// Notify the referrer if possible
 				try {
-					await bot.sendMessage(
-						referrerId,
-						`🎉 Great news! Someone joined using your referral link. You'll receive your reward of 5,000 Stardust and 10 Dark Matter when they open the game!`
+					// For the referrer, we don't know their language, so we'll use English for now
+					// In a real app, you'd look up the referrer's language preference from a database
+					const referrerMessage = referralMessages.en.referrer;
+
+					await bot.sendMessage(referrerId, referrerMessage, {
+						reply_markup: {
+							inline_keyboard: [
+								[
+									{
+										text: buttonTexts.en.openGame,
+										url: `https://t.me/${botUsername}/${myAppName}`,
+									},
+								],
+							],
+						},
+					});
+					console.log(
+						`Sent referral notification to referrer ${referrerId}`
 					);
 				} catch (referrerError) {
 					console.log(
@@ -93,10 +147,14 @@ bot.on("message", async (msg) => {
 			}
 		} catch (error) {
 			console.error("Error sending start message:", error);
-			await bot.sendMessage(
-				chatId,
-				"Welcome to Nebula Hunt! Please try opening the game again."
-			);
+			// Fallback error message in user's language
+			const errorMessages = {
+				en: "Welcome to Nebula Hunt! Please try opening the game again.",
+				ru: "Добро пожаловать в Nebula Hunt! Пожалуйста, попробуйте открыть игру снова.",
+			};
+
+			const errorMessage = errorMessages[userLanguage] || errorMessages.en;
+			await bot.sendMessage(chatId, errorMessage);
 		}
 	}
 });
@@ -248,24 +306,82 @@ app.post("/api/create-payment", async (req, res) => {
 // Create a new API endpoint to verify and process referrals
 app.post("/api/process-referral", async (req, res) => {
 	try {
-		const { userId, referrerId } = req.body;
+		const { userId, referrerId, language } = req.body;
 
-		// In a real implementation, you would:
-		// 1. Verify this is a valid referral (check if not already processed)
-		// 2. Store the referral in your database
-		// 3. Track rewards given to both users
+		// Проверяем, что оба ID предоставлены
+		if (!userId || !referrerId) {
+			return res.status(400).json({
+				success: false,
+				error: "Both user ID and referrer ID are required",
+			});
+		}
 
 		console.log(
-			`Processing referral: User ${userId} was referred by ${referrerId}`
+			`Processing referral: User ${userId} was referred by ${referrerId}, language: ${
+				language || "en"
+			}`
 		);
 
-		// For now, just return success
+		// Определяем язык пользователя (по умолчанию английский)
+		const userLanguage = language || "en";
+
+		// В реальном приложении здесь должна быть проверка, не получил ли уже пользователь награду
+		// Например, проверка в базе данных
+		// Для примера мы создадим заглушку, которая будет имитировать эту проверку
+
+		// Создаем сообщение для реферрера (того, кто пригласил) с учетом языка
+		let referrerMessage = "";
+		let buttonText = "";
+
+		if (userLanguage === "ru") {
+			// Русская версия сообщения
+			referrerMessage =
+				"🎉 Отличные новости! Кто-то присоединился по вашей реферальной ссылке. Вы получили награду: 5,000 звездной пыли и 10 темной материи!";
+			buttonText = "🪐 Открыть игру";
+		} else {
+			// Английская версия сообщения (по умолчанию)
+			referrerMessage =
+				"🎉 Great news! Someone joined using your referral link. You have received a reward of 5,000 Stardust and 10 Dark Matter!";
+			buttonText = "🪐 Open Game";
+		}
+
+		// Отправляем сообщение реферреру
+		try {
+			await bot.sendMessage(referrerId, referrerMessage, {
+				reply_markup: {
+					inline_keyboard: [
+						[
+							{
+								text: buttonText,
+								url: `https://t.me/${botUsername}/${myAppName}`,
+							},
+						],
+					],
+				},
+			});
+			console.log(
+				`Sent referral reward notification to referrer ${referrerId} in ${userLanguage}`
+			);
+		} catch (referrerError) {
+			console.log(
+				`Could not notify referrer ${referrerId}: ${referrerError.message}`
+			);
+			// Продолжаем выполнение даже если сообщение не отправилось
+		}
+
+		// Возвращаем информацию о награде для обоих пользователей
 		res.json({
 			success: true,
 			message: "Referral processed successfully",
 			rewards: {
-				stardust: 5000,
-				darkMatter: 10,
+				invitedUser: {
+					stardust: 5000,
+					darkMatter: 10,
+				},
+				referrer: {
+					stardust: 5000,
+					darkMatter: 10,
+				},
 			},
 		});
 	} catch (error) {
@@ -273,6 +389,59 @@ app.post("/api/process-referral", async (req, res) => {
 		res.status(500).json({
 			success: false,
 			error: "Failed to process referral",
+			details: error.message,
+		});
+	}
+});
+
+// API endpoint для проверки наличия реферальных наград
+app.post("/api/check-referral-rewards", async (req, res) => {
+	try {
+		const { userId, language, processedReferrals } = req.body;
+
+		// Проверяем, что ID пользователя предоставлен
+		if (!userId) {
+			return res.status(400).json({
+				success: false,
+				error: "User ID is required",
+			});
+		}
+
+		console.log(
+			`Checking referral rewards for user ${userId}, language: ${
+				language || "en"
+			}`
+		);
+
+		// В реальном приложении здесь должна быть проверка в базе данных
+		// на наличие рефералов, которые еще не получили награду
+
+		// Получаем список уже обработанных рефералов пользователя
+		// Это нужно для предотвращения повторного получения наград
+		const userProcessedReferrals = processedReferrals || [];
+
+		// В будущем здесь должна быть реальная проверка в базе данных
+		// на наличие новых рефералов, которые еще не обработаны
+		// И не входят в список userProcessedReferrals
+
+		// Для примера возвращаем заглушку (нет наград)
+		res.json({
+			success: true,
+			hasRewards: false,
+			rewards: {
+				stardust: 0,
+				darkMatter: 0,
+			},
+			referrals: [],
+			// Можно добавить список всех рефералов пользователя
+			// allReferrals: [],
+		});
+	} catch (error) {
+		console.error("Error checking referral rewards:", error);
+		res.status(500).json({
+			success: false,
+			error: "Failed to check referral rewards",
+			details: error.message,
 		});
 	}
 });
@@ -295,6 +464,7 @@ app.post("/api/send-collection-notification", async (req, res) => {
 
 		// Формируем текст сообщения на основе языка и количества ресурсов
 		let messageText = "";
+		let buttonText = "";
 
 		if (userLanguage === "ru") {
 			// Русская версия сообщения
@@ -302,37 +472,46 @@ app.post("/api/send-collection-notification", async (req, res) => {
 
 			// Добавляем информацию о доступных ресурсах
 			if (stardustAmount && stardustAmount > 0) {
-				messageText += `\n\n✨ Звездная пыль: ${stardustAmount}`;
+				messageText += `\n\n✨ Звездная пыль: ${stardustAmount.toLocaleString(
+					"ru-RU"
+				)}`;
 			}
 
 			if (darkMatterAmount && darkMatterAmount > 0) {
-				messageText += `\n\n🌑 Темная материя: ${darkMatterAmount}`;
+				messageText += `\n\n🌑 Темная материя: ${darkMatterAmount.toLocaleString(
+					"ru-RU"
+				)}`;
 			}
 
-			messageText += "\n\nЗайдите в игру, чтобы собрать ресурсы!";
+			messageText += "\n\nЗайдите в игру, чтобы собрать ваши ресурсы!";
+			buttonText = "🪐 Открыть игру";
 		} else {
 			// Английская версия сообщения
 			messageText = "🌟 Your resource storage is full and ready to collect!";
 
 			// Добавляем информацию о доступных ресурсах
 			if (stardustAmount && stardustAmount > 0) {
-				messageText += `\n\n✨ Stardust: ${stardustAmount}`;
+				messageText += `\n\n✨ Stardust: ${stardustAmount.toLocaleString(
+					"en-US"
+				)}`;
 			}
 
 			if (darkMatterAmount && darkMatterAmount > 0) {
-				messageText += `\n\n🌑 Dark Matter: ${darkMatterAmount}`;
+				messageText += `\n\n🌑 Dark Matter: ${darkMatterAmount.toLocaleString(
+					"en-US"
+				)}`;
 			}
 
 			messageText += "\n\nOpen the game to collect your resources!";
+			buttonText = "🪐 Open Game";
 		}
 
-		// Создаем кнопку для быстрого перехода в игру с текстом в зависимости от языка
+		// Создаем кнопку для быстрого перехода в игру
 		const webAppUrl = `https://t.me/${botUsername}/${myAppName}`;
-		const buttonText =
-			userLanguage === "ru" ? "🪐 Открыть игру" : "🪐 Open Game";
 
 		// Отправляем сообщение пользователю через бот
 		await bot.sendMessage(userId, messageText, {
+			parse_mode: "HTML",
 			reply_markup: {
 				inline_keyboard: [
 					[
