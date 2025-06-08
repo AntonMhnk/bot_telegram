@@ -58,7 +58,7 @@ bot.on("message", async (msg) => {
 			invitedUser:
 				"🎁 You were invited by a friend! Open the game to receive your welcome bonus of 5,000 Stardust and 10 Dark Matter!",
 			referrer:
-				"🎉 Great news! Someone joined using your referral link. You'll receive your reward of 5,000 Stardust and 10 Dark Matter when they open the game!",
+				"🎉 Great news! Someone joined using your referral link. You have received a reward of 5,000 Stardust and 10 Dark Matter!",
 		},
 		ru: {
 			invitedUser:
@@ -420,11 +420,34 @@ app.post("/api/check-referral-rewards", async (req, res) => {
 		// Это нужно для предотвращения повторного получения наград
 		const userProcessedReferrals = processedReferrals || [];
 
-		// В будущем здесь должна быть реальная проверка в базе данных
-		// на наличие новых рефералов, которые еще не обработаны
-		// И не входят в список userProcessedReferrals
+		// Для демонстрационных целей, давайте случайно решим, есть ли награды
+		// В реальном приложении здесь будет логика проверки в базе данных
+		// В 20% случаев будем возвращать наличие наград (для тестирования)
+		const hasRewards = Math.random() < 0.2;
 
-		// Для примера возвращаем заглушку (нет наград)
+		if (hasRewards) {
+			// Для примера создаем фиктивный ID реферала
+			const newReferrerId = `test_referral_${Date.now()}`;
+
+			// Проверяем, что этот реферал еще не был обработан
+			if (!userProcessedReferrals.includes(newReferrerId)) {
+				// Если наличие наград подтверждено, возвращаем информацию о них
+				res.json({
+					success: true,
+					hasRewards: true,
+					rewards: {
+						stardust: 5000,
+						darkMatter: 10,
+					},
+					referrals: [newReferrerId],
+					message: "New referral reward is available",
+				});
+
+				return;
+			}
+		}
+
+		// Если наград нет, или все уже обработаны, возвращаем соответствующий ответ
 		res.json({
 			success: true,
 			hasRewards: false,
@@ -433,8 +456,7 @@ app.post("/api/check-referral-rewards", async (req, res) => {
 				darkMatter: 0,
 			},
 			referrals: [],
-			// Можно добавить список всех рефералов пользователя
-			// allReferrals: [],
+			message: "No new referral rewards available",
 		});
 	} catch (error) {
 		console.error("Error checking referral rewards:", error);
