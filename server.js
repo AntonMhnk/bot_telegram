@@ -4,6 +4,11 @@ const cors = require("cors");
 const bodyParser = require("body-parser");
 const TelegramBot = require("node-telegram-bot-api");
 
+// Добавляем fetch для Node.js < 18
+if (typeof fetch === "undefined") {
+	global.fetch = require("node-fetch");
+}
+
 const app = express();
 
 // Configure CORS with more detailed options
@@ -24,6 +29,81 @@ const myAppName = "myapp";
 
 // Initialize Telegram bot with optimized settings
 const bot = new TelegramBot(token, { polling: true });
+
+// 🔐 Настройка webhook URL для платежей (только в продакшене)
+if (process.env.NODE_ENV === "production" && process.env.BOT_WEBHOOK_URL) {
+	const webhookUrl = `${process.env.BOT_WEBHOOK_URL}/webhook/telegram-payment`;
+	bot.setWebhook(webhookUrl)
+		.then(() => {
+			console.log(`✅ Webhook URL set: ${webhookUrl}`);
+		})
+		.catch((error) => {
+			console.error(`❌ Failed to set webhook: ${error.message}`);
+		});
+} else {
+	console.log("🧪 Development mode: using polling instead of webhook");
+}
+
+// 🔐 Обработчики событий для Telegram платежей
+bot.on("pre_checkout_query", async (query) => {
+	try {
+		console.log("🔐 Pre-checkout query received:", query);
+
+		// Проверяем данные платежа
+		const payload = JSON.parse(query.invoice_payload);
+		console.log("🔐 Payment payload:", payload);
+
+		// Проверяем тип платежа и валидность
+		if (payload.type && payload.price && payload.price > 0) {
+			// Отвечаем Telegram'у - разрешаем платеж
+			await bot.answerPreCheckoutQuery(query.id, true);
+			console.log("✅ Pre-checkout approved for:", payload.type);
+		} else {
+			// Отклоняем платеж если данные некорректны
+			await bot.answerPreCheckoutQuery(
+				query.id,
+				false,
+				"Invalid payment data"
+			);
+			console.log("❌ Pre-checkout rejected - invalid data");
+		}
+	} catch (error) {
+		console.error("❌ Pre-checkout error:", error);
+		await bot.answerPreCheckoutQuery(
+			query.id,
+			false,
+			"Payment validation failed"
+		);
+	}
+});
+
+bot.on("successful_payment", async (msg) => {
+	try {
+		const payment = msg.successful_payment;
+		const user = msg.from;
+
+		console.log("🎉 Successful payment received:", {
+			payment,
+			user,
+			chatId: msg.chat.id,
+		});
+
+		// Парсим payload для получения данных о платеже
+		const payload = JSON.parse(payment.invoice_payload);
+		console.log("🔐 Payment payload:", payload);
+
+		// Отправляем уведомление пользователю
+		const successMessage = `🎉 Payment successful!\n\n💰 Amount: ${payment.total_amount} ${payment.currency}\n📦 Item: ${payload.type}\n\nYour purchase has been processed successfully!`;
+
+		await bot.sendMessage(msg.chat.id, successMessage);
+
+		// TODO: Здесь нужно обработать платеж и обновить БД
+		// Вызвать соответствующий API для завершения операции
+		// Например: POST /api/game/complete-payment
+	} catch (error) {
+		console.error("❌ Payment processing error:", error);
+	}
+});
 
 bot.on("message", async (msg) => {
 	const chatId = msg.chat.id;
@@ -567,6 +647,122 @@ app.post("/api/send-collection-notification", async (req, res) => {
 
 // Handle OPTIONS requests for CORS
 app.options("*", cors());
+
+// 🔐 Webhook для Telegram платежей
+app.post(
+	"/webhook/telegram-payment",
+	express.raw({ type: "application/json" }),
+	async (req, res) => {
+		try {
+			console.log("🔐 Webhook received:", req.body);
+
+			const update = JSON.parse(req.body);
+
+			if (update.pre_checkout_query) {
+				// Обработка pre-checkout
+				console.log("🔐 Pre-checkout query:", update.pre_checkout_query);
+
+				try {
+					// Проверяем данные платежа
+					const payload = JSON.parse(
+						update.pre_checkout_query.invoice_payload
+					);
+					console.log("🔐 Payment payload:", payload);
+
+					// Отвечаем Telegram'у - разрешаем платеж
+					await bot.answerPreCheckoutQuery(
+						update.pre_checkout_query.id,
+						true
+					);
+					console.log("✅ Pre-checkout approved");
+				} catch (error) {
+					console.error("❌ Pre-checkout error:", error);
+					await bot.answerPreCheckoutQuery(
+						update.pre_checkout_query.id,
+						false,
+						"Invalid payment data"
+					);
+				}
+			}
+
+			if (update.message && update.message.successful_payment) {
+				// Обработка успешного платежа
+				const payment = update.message.successful_payment;
+				const user = update.message.from;
+
+				console.log("🎉 Successful payment received:", {
+					payment,
+					user,
+					chatId: update.message.chat.id,
+				});
+
+				try {
+					// Парсим payload для получения данных о платеже
+					const payload = JSON.parse(payment.invoice_payload);
+					console.log("🔐 Payment payload:", payload);
+
+					// Вызываем API для завершения платежа
+					try {
+						const apiResponse = await fetch(
+							`${
+								process.env.API_BASE_URL || "http://localhost:5000"
+							}/api/game/complete-payment`,
+							{
+								method: "POST",
+								headers: {
+									"Content-Type": "application/json",
+								},
+								body: JSON.stringify({
+									payment,
+									payload,
+									user,
+								}),
+							}
+						);
+
+						if (apiResponse.ok) {
+							const result = await apiResponse.json();
+							console.log("✅ Payment completed via API:", result);
+
+							// Отправляем уведомление пользователю об успешном завершении
+							const successMessage = `🎉 Payment processed successfully!\n\n📦 Item: ${payload.type}\n💰 Amount: ${payment.total_amount} ${payment.currency}\n\nYour purchase has been completed and resources have been added to your account.`;
+							await bot.sendMessage(
+								update.message.chat.id,
+								successMessage
+							);
+						} else {
+							console.error(
+								"❌ API call failed:",
+								apiResponse.status,
+								apiResponse.statusText
+							);
+
+							// Отправляем уведомление об ошибке
+							const errorMessage = `⚠️ Payment processing failed\n\nWe received your payment but encountered an error while processing it. Please contact support with your payment ID: ${payment.telegram_payment_charge_id}`;
+							await bot.sendMessage(
+								update.message.chat.id,
+								errorMessage
+							);
+						}
+					} catch (apiError) {
+						console.error("❌ API call error:", apiError);
+
+						// Отправляем уведомление об ошибке
+						const errorMessage = `⚠️ Payment processing failed\n\nWe received your payment but encountered an error while processing it. Please contact support with your payment ID: ${payment.telegram_payment_charge_id}`;
+						await bot.sendMessage(update.message.chat.id, errorMessage);
+					}
+				} catch (error) {
+					console.error("❌ Payment processing error:", error);
+				}
+			}
+
+			res.sendStatus(200);
+		} catch (error) {
+			console.error("❌ Webhook error:", error);
+			res.sendStatus(500);
+		}
+	}
+);
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
