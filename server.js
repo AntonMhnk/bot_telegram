@@ -27,21 +27,38 @@ const photoPath = "./images/spaceImage.webp";
 const botUsername = "NebulaHuntBot"; // Add your bot username
 const myAppName = "myapp";
 
-// Initialize Telegram bot with optimized settings
-const bot = new TelegramBot(token, { polling: true });
+// Определяем режим работы бота
+const isProduction =
+	process.env.NODE_ENV === "production" && process.env.BOT_WEBHOOK_URL;
+
+// Initialize Telegram bot
+const bot = new TelegramBot(token, {
+	polling: !isProduction, // Polling только в dev mode
+});
 
 // 🔐 Настройка webhook URL для платежей (только в продакшене)
-if (process.env.NODE_ENV === "production" && process.env.BOT_WEBHOOK_URL) {
+if (isProduction) {
 	const webhookUrl = `${process.env.BOT_WEBHOOK_URL}/webhook/telegram-payment`;
-	bot.setWebhook(webhookUrl)
+	const webhookOptions = {
+		drop_pending_updates: true, // Удалить старые обновления при старте
+	};
+
+	// Добавляем секретный токен если он установлен
+	if (process.env.WEBHOOK_SECRET_TOKEN) {
+		webhookOptions.secret_token = process.env.WEBHOOK_SECRET_TOKEN;
+		console.log("🔐 Webhook secret token configured");
+	}
+
+	bot.setWebhook(webhookUrl, webhookOptions)
 		.then(() => {
 			console.log(`✅ Webhook URL set: ${webhookUrl}`);
+			console.log("🔐 Production mode: using webhook for payments");
 		})
 		.catch((error) => {
 			console.error(`❌ Failed to set webhook: ${error.message}`);
 		});
 } else {
-	console.log("🧪 Development mode: using polling instead of webhook");
+	console.log("🧪 Development mode: using polling for payments");
 }
 
 // 🔐 Обработчики событий для Telegram платежей
@@ -654,7 +671,17 @@ app.post(
 	express.raw({ type: "application/json" }),
 	async (req, res) => {
 		try {
-			console.log("🔐 Webhook received:", req.body);
+			console.log("🔐 Webhook received from IP:", req.ip);
+
+			// Проверка секретного токена (если установлен)
+			const secretToken = req.headers["x-telegram-bot-api-secret-token"];
+			if (
+				process.env.WEBHOOK_SECRET_TOKEN &&
+				secretToken !== process.env.WEBHOOK_SECRET_TOKEN
+			) {
+				console.error("❌ Invalid webhook secret token");
+				return res.sendStatus(403);
+			}
 
 			const update = JSON.parse(req.body);
 
@@ -754,7 +781,7 @@ app.post(
 				} catch (error) {
 					console.error("❌ Payment processing error:", error);
 				}
-			}
+			} // Закрывающая скобка для successful_payment
 
 			res.sendStatus(200);
 		} catch (error) {
