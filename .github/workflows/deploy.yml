@@ -8,7 +8,7 @@ on:
 
 env:
     REGISTRY: ghcr.io
-    IMAGE_NAME: ${{ github.repository }}
+    IMAGE_NAME: ${{ github.repository_owner }}/${{ github.event.repository.name }}
 
 jobs:
     build-and-deploy:
@@ -64,10 +64,10 @@ jobs:
                       cd /var/www/nebulahunt/bot
 
                       # Login to GitHub Container Registry
-                      echo ${{ secrets.GHCR_TOKEN }} | docker login ghcr.io -u ${{ secrets.GITHUB_ACTOR }} --password-stdin
+                      echo ${{ secrets.GHCR_TOKEN }} | docker login ghcr.io -u ${{ github.actor }} --password-stdin
 
-                      # Pull latest image
-                      docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+                      # Pull latest image (lowercase имя репозитория)
+                      docker pull ghcr.io/antonmhnk/bot_telegram:latest
 
                       # Stop and remove old container
                       docker stop nebulahunt-bot || true
@@ -85,7 +85,7 @@ jobs:
                         -e API_BASE_URL=${{ secrets.API_BASE_URL }} \
                         -e BOT_WEBHOOK_URL=${{ secrets.BOT_WEBHOOK_URL }} \
                         -e WEBHOOK_SECRET_TOKEN=${{ secrets.WEBHOOK_SECRET_TOKEN }} \
-                        ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+                        ghcr.io/antonmhnk/bot_telegram:latest
 
                       # Clean up old images
                       docker image prune -f
