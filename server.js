@@ -207,7 +207,8 @@ bot.on("message", async (msg) => {
 				}
 			}
 
-			const webAppUrl = `https://t.me/${botUsername}/${myAppName}?startapp=${startParam}`;
+			// URL игры - используем прямой URL на домен
+			const gameUrl = `t.me/NebulaHuntBot/nebulahunt`;
 
 			// Send welcome message
 			await bot.sendPhoto(chatId, photoPath, {
@@ -217,7 +218,9 @@ bot.on("message", async (msg) => {
 						[
 							{
 								text: buttonText.openGame,
-								url: webAppUrl,
+								web_app: {
+									url: gameUrl,
+								},
 							},
 						],
 						[{ text: buttonText.joinCommunity, url: urlCom }],
@@ -748,7 +751,8 @@ app.post(
 							startParam = args[1];
 						}
 
-						const webAppUrl = `https://t.me/${botUsername}/${myAppName}?startapp=${startParam}`;
+						// URL игры - используем прямой URL на домен
+						const gameUrl = `t.me/NebulaHuntBot/nebulahunt`;
 
 						await bot.sendPhoto(chatId, photoPath, {
 							caption: caption,
@@ -757,7 +761,9 @@ app.post(
 									[
 										{
 											text: buttonText.openGame,
-											url: webAppUrl,
+											web_app: {
+												url: gameUrl,
+											},
 										},
 									],
 									[
