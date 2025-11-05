@@ -32,7 +32,7 @@ const isProduction =
 	process.env.NODE_ENV === "production" && process.env.BOT_WEBHOOK_URL;
 
 // Initialize Telegram bot
-// В production НЕ используем polling, чтобы setWebhook работал
+// В production НЕ используем polling, чтобы webhook работал
 const botOptions = {};
 if (!isProduction) {
 	botOptions.polling = true; // Polling только в dev mode
@@ -53,11 +53,25 @@ if (isProduction) {
 		console.log("🔐 Webhook secret token configured");
 	}
 
-	// Устанавливаем webhook (метод доступен когда polling не включен)
-	bot.setWebhook(webhookUrl, webhookOptions)
-		.then(() => {
-			console.log(`✅ Webhook URL set: ${webhookUrl}`);
-			console.log("🔐 Production mode: using webhook for payments");
+	// Используем прямой API вызов через fetch (библиотека не поддерживает setWebhook без polling)
+	fetch(`https://api.telegram.org/bot${token}/setWebhook`, {
+		method: "POST",
+		headers: {
+			"Content-Type": "application/json",
+		},
+		body: JSON.stringify({
+			url: webhookUrl,
+			...webhookOptions,
+		}),
+	})
+		.then((response) => response.json())
+		.then((data) => {
+			if (data.ok) {
+				console.log(`✅ Webhook URL set: ${webhookUrl}`);
+				console.log("🔐 Production mode: using webhook for payments");
+			} else {
+				console.error(`❌ Failed to set webhook: ${data.description}`);
+			}
 		})
 		.catch((error) => {
 			console.error(`❌ Failed to set webhook: ${error.message}`);
