@@ -704,9 +704,9 @@ app.post(
 
 			// Парсим body (может быть Buffer, строка или уже объект)
 			let update;
-			if (typeof req.body === 'string' || Buffer.isBuffer(req.body)) {
+			if (typeof req.body === "string" || Buffer.isBuffer(req.body)) {
 				update = JSON.parse(req.body.toString());
-			} else if (typeof req.body === 'object' && req.body !== null) {
+			} else if (typeof req.body === "object" && req.body !== null) {
 				update = req.body; // Уже распарсен
 			} else {
 				throw new Error("Invalid request body format");
@@ -739,7 +739,8 @@ app.post(
 						};
 
 						const caption = captions[userLanguage] || captions.en;
-						const buttonText = buttonTexts[userLanguage] || buttonTexts.en;
+						const buttonText =
+							buttonTexts[userLanguage] || buttonTexts.en;
 
 						const args = text.split(" ");
 						let startParam = "ABC";
@@ -759,7 +760,12 @@ app.post(
 											url: webAppUrl,
 										},
 									],
-									[{ text: buttonText.joinCommunity, url: urlCom }],
+									[
+										{
+											text: buttonText.joinCommunity,
+											url: urlCom,
+										},
+									],
 								],
 							},
 						});
