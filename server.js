@@ -702,8 +702,82 @@ app.post(
 				return res.sendStatus(403);
 			}
 
-			const update = JSON.parse(req.body);
+			// Парсим body (может быть Buffer, строка или уже объект)
+			let update;
+			if (typeof req.body === 'string' || Buffer.isBuffer(req.body)) {
+				update = JSON.parse(req.body.toString());
+			} else if (typeof req.body === 'object' && req.body !== null) {
+				update = req.body; // Уже распарсен
+			} else {
+				throw new Error("Invalid request body format");
+			}
 
+			// Обработка обычных сообщений (команды, текстовые сообщения)
+			if (update.message) {
+				const msg = update.message;
+				const chatId = msg.chat.id;
+				const text = msg.text;
+				const userLanguage = msg.from?.language_code || "en";
+
+				// Обработка команды /start
+				if (text && text.startsWith("/start")) {
+					try {
+						const captions = {
+							en: `Welcome to Nebula Hunt! 🚀\n\nYou are about to embark on a journey through the unexplored corners of the universe.\n\nScan deep space, discover ancient planets, and build your own galactic legacy.\n\n🌌 Tap "Open game!" to begin your mission.\n\n🪐 Rare worlds await. Some… may even change everything.\n\nGood luck, Pioneer. The stars are watching.`,
+							ru: `Добро пожаловать в Nebula Hunt! 🚀\n\nВы готовы отправиться в путешествие по неизведанным уголкам вселенной.\n\nСканируйте глубокий космос, открывайте древние планеты и создавайте своё галактическое наследие.\n\n🌌 Нажмите "Открыть игру!", чтобы начать миссию.\n\n🪐 Редкие миры ждут. Некоторые... могут даже изменить всё.\n\nУдачи, Первопроходец. Звёзды наблюдают за вами.`,
+						};
+
+						const buttonTexts = {
+							en: {
+								openGame: "🪐 Open game!",
+								joinCommunity: "Join community!",
+							},
+							ru: {
+								openGame: "🪐 Открыть игру!",
+								joinCommunity: "Присоединиться к сообществу!",
+							},
+						};
+
+						const caption = captions[userLanguage] || captions.en;
+						const buttonText = buttonTexts[userLanguage] || buttonTexts.en;
+
+						const args = text.split(" ");
+						let startParam = "ABC";
+						if (args.length > 1) {
+							startParam = args[1];
+						}
+
+						const webAppUrl = `https://t.me/${botUsername}/${myAppName}?startapp=${startParam}`;
+
+						await bot.sendPhoto(chatId, photoPath, {
+							caption: caption,
+							reply_markup: {
+								inline_keyboard: [
+									[
+										{
+											text: buttonText.openGame,
+											url: webAppUrl,
+										},
+									],
+									[{ text: buttonText.joinCommunity, url: urlCom }],
+								],
+							},
+						});
+
+						console.log("✅ /start command processed");
+						return res.sendStatus(200);
+					} catch (error) {
+						console.error("❌ Error processing /start:", error);
+					}
+				}
+
+				// Если это не платеж и не команда, просто отвечаем 200
+				if (!msg.successful_payment) {
+					return res.sendStatus(200);
+				}
+			}
+
+			// Обработка pre_checkout_query (платежи)
 			if (update.pre_checkout_query) {
 				// Обработка pre-checkout
 				console.log("🔐 Pre-checkout query:", update.pre_checkout_query);
