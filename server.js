@@ -815,5 +815,10 @@ app.listen(PORT, () => {
 	console.log(`Server running on port ${PORT}`);
 });
 
+// Lightweight health check endpoint for load balancers and uptime checks
+app.get("/health", (req, res) => {
+    res.status(200).send("ok");
+});
+
 // Export the Express API
 module.exports = app;
