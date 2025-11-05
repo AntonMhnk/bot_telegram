@@ -5,8 +5,8 @@ WORKDIR /app
 # Копируем package файлы
 COPY package*.json ./
 
-# Устанавливаем зависимости
-RUN npm ci --omit=dev
+# Устанавливаем зависимости (используем install вместо ci для совместимости)
+RUN npm install --omit=dev --legacy-peer-deps
 
 # Копируем исходный код
 COPY . .
