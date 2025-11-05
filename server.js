@@ -32,9 +32,13 @@ const isProduction =
 	process.env.NODE_ENV === "production" && process.env.BOT_WEBHOOK_URL;
 
 // Initialize Telegram bot
-const bot = new TelegramBot(token, {
-	polling: !isProduction, // Polling только в dev mode
-});
+// В production НЕ используем polling, чтобы setWebhook работал
+const botOptions = {};
+if (!isProduction) {
+	botOptions.polling = true; // Polling только в dev mode
+}
+
+const bot = new TelegramBot(token, botOptions);
 
 // 🔐 Настройка webhook URL для платежей (только в продакшене)
 if (isProduction) {
@@ -49,6 +53,7 @@ if (isProduction) {
 		console.log("🔐 Webhook secret token configured");
 	}
 
+	// Устанавливаем webhook (метод доступен когда polling не включен)
 	bot.setWebhook(webhookUrl, webhookOptions)
 		.then(() => {
 			console.log(`✅ Webhook URL set: ${webhookUrl}`);
