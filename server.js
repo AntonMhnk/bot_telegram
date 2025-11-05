@@ -208,7 +208,7 @@ bot.on("message", async (msg) => {
 			}
 
 			// URL игры - используем прямой URL на домен
-			const gameUrl = `t.me/NebulaHuntBot/nebulahunt`;
+			const gameUrl = `https://t.me/NebulaHuntBot/nebulahunt`;
 
 			// Send welcome message
 			await bot.sendPhoto(chatId, photoPath, {
@@ -752,7 +752,7 @@ app.post(
 						}
 
 						// URL игры - используем прямой URL на домен
-						const gameUrl = `t.me/NebulaHuntBot/nebulahunt`;
+						const gameUrl = `https://t.me/NebulaHuntBot/nebulahunt`;
 
 						await bot.sendPhoto(chatId, photoPath, {
 							caption: caption,
