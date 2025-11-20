@@ -83,9 +83,29 @@ jobs:
                         -e PORT=3000 \
                         -e TG_BOT_API_KEY=${{ secrets.TG_BOT_API_KEY }} \
                         -e API_BASE_URL=${{ secrets.API_BASE_URL }} \
+                        -e API_URL=${{ secrets.API_URL }} \
                         -e BOT_WEBHOOK_URL=${{ secrets.BOT_WEBHOOK_URL }} \
                         -e WEBHOOK_SECRET_TOKEN=${{ secrets.WEBHOOK_SECRET_TOKEN }} \
+                        -e REMINDER_SECRET=${{ secrets.REMINDER_SECRET }} \
                         ghcr.io/antonmhnk/bot_telegram:latest
+
+                      # Check if container was created
+                      if [ $? -ne 0 ]; then
+                          echo "❌ Failed to create bot container"
+                          docker logs nebulahunt-bot 2>&1 || echo "No logs available"
+                          exit 1
+                      fi
+
+                      # Check if container is running
+                      sleep 5
+                      if ! docker ps | grep -q nebulahunt-bot; then
+                          echo "⚠️ Bot container is not running. Checking logs..."
+                          docker logs nebulahunt-bot --tail 50 || echo "No logs available"
+                          exit 1
+                      fi
+
+                      echo "✅ Bot deployed successfully"
+                      echo "✅ Daily reminder cron job will run at 10:00 and 18:00 UTC"
 
                       # Clean up old images
                       docker image prune -f

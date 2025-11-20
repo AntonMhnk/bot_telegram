@@ -3,6 +3,8 @@ const express = require("express");
 const cors = require("cors");
 const bodyParser = require("body-parser");
 const TelegramBot = require("node-telegram-bot-api");
+const cron = require("node-cron");
+const axios = require("axios");
 
 // Добавляем fetch для Node.js < 18
 if (typeof fetch === "undefined") {
@@ -232,8 +234,8 @@ bot.on("message", async (msg) => {
 				}
 			}
 
-		// URL игры - используем прямой URL на домен
-		const gameUrl = `https://nebulahunt.site/?startapp=${startParam}`;
+			// URL игры - используем прямой URL на домен
+			const gameUrl = `https://nebulahunt.site/?startapp=${startParam}`;
 
 			// Send welcome message
 			await bot.sendPhoto(chatId, photoPath, {
@@ -853,8 +855,8 @@ app.post(
 							startParam = args[1];
 						}
 
-		// URL игры - используем прямой URL на домен
-		const gameUrl = `https://nebulahunt.site/?startapp=${startParam}`;
+						// URL игры - используем прямой URL на домен
+						const gameUrl = `https://nebulahunt.site/?startapp=${startParam}`;
 
 						await bot.sendPhoto(chatId, photoPath, {
 							caption: caption,
@@ -997,6 +999,182 @@ app.post(
 		}
 	}
 );
+
+// ============================================
+// 📬 DAILY REMINDER SYSTEM
+// ============================================
+
+/**
+ * Send a reminder notification to a user
+ * @param {number} userId - Telegram user ID
+ * @param {string} username - Username
+ * @param {string} language - User language (en/ru)
+ */
+async function sendReminderNotification(userId, username, language = "en") {
+	try {
+		console.log(`📬 Sending reminder to user ${userId} (${username})`);
+
+		const messages = {
+			en: {
+				text:
+					`🌟 <b>Hey ${username || "Space Explorer"}!</b>\n\n` +
+					`💎 Your galaxies are waiting for you!\n` +
+					`⭐️ Collect stardust and expand your cosmic empire!\n\n` +
+					`🚀 <i>The universe never sleeps, and neither should your ambitions!</i>`,
+				button: "🎮 Open Game",
+			},
+			ru: {
+				text:
+					`🌟 <b>Привет, ${username || "Исследователь космоса"}!</b>\n\n` +
+					`💎 Твои галактики ждут тебя!\n` +
+					`⭐️ Собери звездную пыль и расширь свою космическую империю!\n\n` +
+					`🚀 <i>Вселенная никогда не спит, как и твои амбиции!</i>`,
+				button: "🎮 Открыть игру",
+			},
+		};
+
+		const msg = messages[language] || messages.en;
+		const gameUrl = `https://t.me/${botUsername}/${myAppName}`;
+
+		await bot.sendMessage(userId, msg.text, {
+			parse_mode: "HTML",
+			reply_markup: {
+				inline_keyboard: [
+					[
+						{
+							text: msg.button,
+							web_app: { url: gameUrl },
+						},
+					],
+				],
+			},
+		});
+
+		console.log(`✅ Reminder sent successfully to ${userId}`);
+		return { success: true };
+	} catch (error) {
+		console.error(`❌ Failed to send reminder to ${userId}:`, error.message);
+		return { success: false, error: error.message };
+	}
+}
+
+/**
+ * Check inactive users and send reminders
+ */
+async function checkAndSendReminders() {
+	try {
+		console.log("\n🔔 ========== CHECKING FOR INACTIVE USERS ==========");
+		console.log(`⏰ Time: ${new Date().toLocaleString()}`);
+
+		const API_URL = process.env.API_URL || "https://nebulahunt.site/api";
+
+		// Get list of users who need reminders from the main API
+		const response = await axios.get(`${API_URL}/users/inactive`, {
+			timeout: 30000,
+			headers: {
+				"Content-Type": "application/json",
+			},
+		});
+
+		const inactiveUsers = response.data.users || [];
+		console.log(`📊 Found ${inactiveUsers.length} inactive users`);
+
+		if (inactiveUsers.length === 0) {
+			console.log("✅ No users need reminders right now");
+			return;
+		}
+
+		let sentCount = 0;
+		let failedCount = 0;
+
+		// Send reminders with delay to avoid rate limits
+		for (const user of inactiveUsers) {
+			try {
+				const result = await sendReminderNotification(
+					user.id,
+					user.username,
+					user.language || "en"
+				);
+
+				if (result.success) {
+					sentCount++;
+
+					// Update lastReminderSentAt on the API server
+					await axios
+						.post(
+							`${API_URL}/users/update-reminder-time`,
+							{ userId: user.id },
+							{
+								timeout: 5000,
+								headers: { "Content-Type": "application/json" },
+							}
+						)
+						.catch((err) => {
+							console.warn(
+								`⚠️ Failed to update reminder time for ${user.id}:`,
+								err.message
+							);
+						});
+				} else {
+					failedCount++;
+				}
+
+				// Delay between messages to avoid rate limits (1 second)
+				await new Promise((resolve) => setTimeout(resolve, 1000));
+			} catch (error) {
+				console.error(
+					`❌ Error sending reminder to ${user.id}:`,
+					error.message
+				);
+				failedCount++;
+			}
+		}
+
+		console.log(`\n📈 Reminder summary:`);
+		console.log(`   ✅ Sent: ${sentCount}`);
+		console.log(`   ❌ Failed: ${failedCount}`);
+		console.log("========================================\n");
+	} catch (error) {
+		console.error("❌ Error in checkAndSendReminders:", error.message);
+	}
+}
+
+// Schedule reminder checks
+// Run twice a day: at 10:00 and 18:00 (server time)
+cron.schedule(
+	"0 10,18 * * *",
+	() => {
+		console.log("🕐 Cron job triggered: Checking for inactive users...");
+		checkAndSendReminders();
+	},
+	{
+		timezone: "UTC", // Adjust to your timezone
+	}
+);
+
+console.log("✅ Daily reminder cron job scheduled (10:00 and 18:00 UTC)");
+
+// Manual trigger endpoint for testing (protected by simple auth)
+app.post("/api/trigger-reminders", async (req, res) => {
+	try {
+		const { secret } = req.body;
+
+		// Simple secret check (add REMINDER_SECRET to .env)
+		if (secret !== process.env.REMINDER_SECRET) {
+			return res.status(401).json({ error: "Unauthorized" });
+		}
+
+		console.log("🔧 Manual reminder trigger requested");
+		await checkAndSendReminders();
+
+		res.json({ success: true, message: "Reminders sent" });
+	} catch (error) {
+		console.error("Error triggering reminders:", error);
+		res.status(500).json({ error: error.message });
+	}
+});
+
+// ============================================
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
