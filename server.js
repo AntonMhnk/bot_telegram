@@ -232,8 +232,8 @@ bot.on("message", async (msg) => {
 				}
 			}
 
-			// URL игры - используем прямой URL на домен
-			const gameUrl = `https://nebulahunt.site/?start=${startParam}`;
+		// URL игры - используем прямой URL на домен
+		const gameUrl = `https://nebulahunt.site/?startapp=${startParam}`;
 
 			// Send welcome message
 			await bot.sendPhoto(chatId, photoPath, {
@@ -853,8 +853,8 @@ app.post(
 							startParam = args[1];
 						}
 
-						// URL игры - используем прямой URL на домен
-						const gameUrl = `https://nebulahunt.site/?start=${startParam}`;
+		// URL игры - используем прямой URL на домен
+		const gameUrl = `https://nebulahunt.site/?startapp=${startParam}`;
 
 						await bot.sendPhoto(chatId, photoPath, {
 							caption: caption,
