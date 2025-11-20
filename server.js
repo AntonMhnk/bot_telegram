@@ -1016,6 +1016,73 @@ app.post(
 // ============================================
 
 /**
+ * Send a custom notification to a user
+ * @param {number} userId - Telegram user ID
+ * @param {string} message - Custom message text
+ * @param {boolean} showOpenGameButton - Show "Open Game" button
+ * @param {boolean} showCommunityButton - Show "Community" button
+ * @param {string} language - User language (en/ru)
+ */
+async function sendCustomNotification(
+	userId,
+	message,
+	showOpenGameButton = false,
+	showCommunityButton = false,
+	language = "en"
+) {
+	try {
+		console.log(`📬 Sending custom notification to user ${userId}`);
+
+		const gameUrl = "https://nebulahunt.site/";
+		const communityUrl = "https://t.me/+ur3meeF_bOo1ZGRi";
+
+		const buttons = {
+			en: {
+				openGame: "🎮 Open Game",
+				community: "💬 Community",
+			},
+			ru: {
+				openGame: "🎮 Открыть игру",
+				community: "💬 Сообщество",
+			},
+		};
+
+		const btn = buttons[language] || buttons.en;
+
+		// Build inline keyboard
+		const inlineKeyboard = [];
+		if (showOpenGameButton && showCommunityButton) {
+			// Both buttons in one row
+			inlineKeyboard.push([
+				{ text: btn.openGame, web_app: { url: gameUrl } },
+				{ text: btn.community, url: communityUrl },
+			]);
+		} else if (showOpenGameButton) {
+			inlineKeyboard.push([{ text: btn.openGame, web_app: { url: gameUrl } }]);
+		} else if (showCommunityButton) {
+			inlineKeyboard.push([{ text: btn.community, url: communityUrl }]);
+		}
+
+		await bot.sendMessage(userId, message, {
+			parse_mode: "HTML",
+			reply_markup:
+				inlineKeyboard.length > 0
+					? { inline_keyboard: inlineKeyboard }
+					: undefined,
+		});
+
+		console.log(`✅ Custom notification sent successfully to ${userId}`);
+		return { success: true };
+	} catch (error) {
+		console.error(
+			`❌ Failed to send custom notification to ${userId}:`,
+			error.message
+		);
+		return { success: false, error: error.message };
+	}
+}
+
+/**
  * Send a reminder notification to a user
  * @param {number} userId - Telegram user ID
  * @param {string} username - Username
@@ -1070,6 +1137,123 @@ async function sendReminderNotification(userId, username, language = "en") {
 }
 
 /**
+ * Force send reminders to all users or specified user IDs
+ */
+async function sendRemindersForced(userIds = null) {
+	try {
+		console.log("\n⚡ ========== FORCE SENDING REMINDERS ==========");
+		console.log(`⏰ Time: ${new Date().toLocaleString()}`);
+
+		const API_URL = process.env.API_URL || "https://nebulahunt.site/api";
+		let users = [];
+
+		if (userIds && Array.isArray(userIds) && userIds.length > 0) {
+			// Send to specific users
+			console.log(`📋 Sending to ${userIds.length} specified users`);
+			for (const userId of userIds) {
+				try {
+					// Get user info from API
+					const userResponse = await axios.get(
+						`${API_URL}/users/${userId}`,
+						{
+							timeout: 5000,
+							headers: { "Content-Type": "application/json" },
+						}
+					);
+					if (userResponse.data && userResponse.data.user) {
+						users.push({
+							id: userId,
+							username: userResponse.data.user.username || "User",
+							language: userResponse.data.user.language || "en",
+						});
+					}
+				} catch (err) {
+					console.warn(`⚠️ Failed to fetch user ${userId}:`, err.message);
+				}
+			}
+		} else {
+			// Send to all users with reminders enabled
+			console.log(`📋 Fetching all users with reminders enabled`);
+			const response = await axios.get(`${API_URL}/users/all-for-reminders`, {
+				timeout: 30000,
+				headers: {
+					"Content-Type": "application/json",
+					"x-bot-secret": process.env.REMINDER_SECRET,
+				},
+			});
+			users = response.data.users || [];
+		}
+
+		console.log(`📊 Found ${users.length} users to notify`);
+
+		if (users.length === 0) {
+			console.log("⚠️ No users found to send reminders");
+			return;
+		}
+
+		let sentCount = 0;
+		let failedCount = 0;
+
+		// Send reminders with delay to avoid rate limits
+		for (const user of users) {
+			try {
+				const result = await sendReminderNotification(
+					user.id,
+					user.username,
+					user.language || "en"
+				);
+
+				if (result.success) {
+					sentCount++;
+
+					// Update lastReminderSentAt on the API server
+					await axios
+						.post(
+							`${API_URL}/users/update-reminder-time`,
+							{
+								userId: user.id,
+								secret: process.env.REMINDER_SECRET,
+							},
+							{
+								timeout: 5000,
+								headers: {
+									"Content-Type": "application/json",
+									"x-bot-secret": process.env.REMINDER_SECRET,
+								},
+							}
+						)
+						.catch((err) => {
+							console.warn(
+								`⚠️ Failed to update reminder time for ${user.id}:`,
+								err.message
+							);
+						});
+				} else {
+					failedCount++;
+				}
+
+				// Delay between messages to avoid rate limits (1 second)
+				await new Promise((resolve) => setTimeout(resolve, 1000));
+			} catch (error) {
+				console.error(
+					`❌ Error sending reminder to ${user.id}:`,
+					error.message
+				);
+				failedCount++;
+			}
+		}
+
+		console.log(`\n📈 Force reminder summary:`);
+		console.log(`   ✅ Sent: ${sentCount}`);
+		console.log(`   ❌ Failed: ${failedCount}`);
+		console.log("========================================\n");
+	} catch (error) {
+		console.error("❌ Error in sendRemindersForced:", error.message);
+		throw error;
+	}
+}
+
+/**
  * Check inactive users and send reminders
  */
 async function checkAndSendReminders() {
@@ -1084,6 +1268,7 @@ async function checkAndSendReminders() {
 			timeout: 30000,
 			headers: {
 				"Content-Type": "application/json",
+				"x-bot-secret": process.env.REMINDER_SECRET,
 			},
 		});
 
@@ -1114,10 +1299,16 @@ async function checkAndSendReminders() {
 					await axios
 						.post(
 							`${API_URL}/users/update-reminder-time`,
-							{ userId: user.id },
+							{
+								userId: user.id,
+								secret: process.env.REMINDER_SECRET,
+							},
 							{
 								timeout: 5000,
-								headers: { "Content-Type": "application/json" },
+								headers: {
+									"Content-Type": "application/json",
+									"x-bot-secret": process.env.REMINDER_SECRET,
+								},
 							}
 						)
 						.catch((err) => {
@@ -1168,7 +1359,7 @@ console.log("✅ Daily reminder cron job scheduled (10:00 and 18:00 UTC)");
 // Manual trigger endpoint for testing (protected by simple auth)
 app.post("/api/trigger-reminders", async (req, res) => {
 	try {
-		const { secret } = req.body;
+		const { secret, force = false, userIds = null } = req.body;
 
 		// Simple secret check (add REMINDER_SECRET to .env)
 		if (secret !== process.env.REMINDER_SECRET) {
@@ -1176,11 +1367,119 @@ app.post("/api/trigger-reminders", async (req, res) => {
 		}
 
 		console.log("🔧 Manual reminder trigger requested");
-		await checkAndSendReminders();
+		console.log(`⚡ Force mode: ${force}`);
+		console.log(`👥 User IDs: ${userIds ? JSON.stringify(userIds) : "all"}`);
+
+		if (force) {
+			// Force send to all users or specified users
+			await sendRemindersForced(userIds);
+		} else {
+			// Normal check for inactive users
+			await checkAndSendReminders();
+		}
 
 		res.json({ success: true, message: "Reminders sent" });
 	} catch (error) {
 		console.error("Error triggering reminders:", error);
+		res.status(500).json({ error: error.message });
+	}
+});
+
+// Custom notification endpoint
+app.post("/api/send-custom-notification", async (req, res) => {
+	try {
+		const {
+			secret,
+			message,
+			userIds,
+			showOpenGameButton = false,
+			showCommunityButton = false,
+		} = req.body;
+
+		// Secret check
+		if (secret !== process.env.REMINDER_SECRET) {
+			return res.status(401).json({ error: "Unauthorized" });
+		}
+
+		if (!message || !message.trim()) {
+			return res.status(400).json({ error: "Message is required" });
+		}
+
+		if (!userIds || !Array.isArray(userIds) || userIds.length === 0) {
+			return res
+				.status(400)
+				.json({ error: "User IDs array is required and must not be empty" });
+		}
+
+		console.log("\n📨 ========== SEND CUSTOM NOTIFICATION ==========");
+		console.log(`💬 Message: ${message}`);
+		console.log(`👥 User IDs: ${userIds.length} users`);
+		console.log(`🎮 Open Game button: ${showOpenGameButton}`);
+		console.log(`💬 Community button: ${showCommunityButton}`);
+
+		const API_URL = process.env.API_URL || "https://nebulahunt.site/api";
+		let sentCount = 0;
+		let failedCount = 0;
+
+		// Send to each user
+		for (const userId of userIds) {
+			try {
+				// Get user language from API
+				let language = "en";
+				try {
+					const userResponse = await axios.get(
+						`${API_URL}/users/${userId}`,
+						{
+							timeout: 5000,
+							headers: {
+								"Content-Type": "application/json",
+								"x-bot-secret": process.env.REMINDER_SECRET,
+							},
+						}
+					);
+					language = userResponse.data?.user?.language || "en";
+				} catch (err) {
+					console.warn(
+						`⚠️ Failed to fetch user ${userId} language, using default:`,
+						err.message
+					);
+				}
+
+				const result = await sendCustomNotification(
+					userId,
+					message.trim(),
+					showOpenGameButton,
+					showCommunityButton,
+					language
+				);
+
+				if (result.success) {
+					sentCount++;
+				} else {
+					failedCount++;
+				}
+
+				// Delay between messages to avoid rate limits (1 second)
+				await new Promise((resolve) => setTimeout(resolve, 1000));
+			} catch (error) {
+				console.error(`❌ Error sending to ${userId}:`, error.message);
+				failedCount++;
+			}
+		}
+
+		console.log(`\n📈 Custom notification summary:`);
+		console.log(`   ✅ Sent: ${sentCount}`);
+		console.log(`   ❌ Failed: ${failedCount}`);
+		console.log("========================================\n");
+
+		res.json({
+			success: true,
+			message: "Custom notifications sent",
+			sent: sentCount,
+			failed: failedCount,
+		});
+	} catch (error) {
+		console.error("Error sending custom notifications:", error);
 		res.status(500).json({ error: error.message });
 	}
 });
