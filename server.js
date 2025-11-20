@@ -40,6 +40,18 @@ const photoPath = "./images/spaceImage.webp";
 const botUsername = "NebulaHuntBot"; // Add your bot username
 const myAppName = "myapp";
 
+// Helper function to sanitize secret for HTTP headers
+// Removes all control characters and invalid header characters
+function sanitizeHeaderValue(value) {
+	if (!value) return "";
+	// Remove all control characters (0x00-0x1F except TAB 0x09) and DEL (0x7F)
+	// Also remove carriage return and line feed
+	return String(value)
+		.trim()
+		.replace(/[\x00-\x08\x0B-\x0C\x0E-\x1F\x7F]/g, "")
+		.replace(/[\r\n]/g, "");
+}
+
 // Определяем режим работы бота
 const isProduction =
 	process.env.NODE_ENV === "production" && process.env.BOT_WEBHOOK_URL;
@@ -1178,7 +1190,7 @@ async function sendRemindersForced(userIds = null) {
 				timeout: 30000,
 				headers: {
 					"Content-Type": "application/json",
-					"x-bot-secret": (process.env.REMINDER_SECRET || "").trim(),
+					"x-bot-secret": sanitizeHeaderValue(process.env.REMINDER_SECRET),
 				},
 			});
 			users = response.data.users || [];
@@ -1212,15 +1224,17 @@ async function sendRemindersForced(userIds = null) {
 							`${API_URL}/users/update-reminder-time`,
 							{
 								userId: user.id,
-								secret: (process.env.REMINDER_SECRET || "").trim(),
+								secret: sanitizeHeaderValue(
+									process.env.REMINDER_SECRET
+								),
 							},
 							{
 								timeout: 5000,
 								headers: {
 									"Content-Type": "application/json",
-									"x-bot-secret": (
-										process.env.REMINDER_SECRET || ""
-									).trim(),
+									"x-bot-secret": sanitizeHeaderValue(
+										process.env.REMINDER_SECRET
+									),
 								},
 							}
 						)
@@ -1303,15 +1317,17 @@ async function checkAndSendReminders() {
 							`${API_URL}/users/update-reminder-time`,
 							{
 								userId: user.id,
-								secret: (process.env.REMINDER_SECRET || "").trim(),
+								secret: sanitizeHeaderValue(
+									process.env.REMINDER_SECRET
+								),
 							},
 							{
 								timeout: 5000,
 								headers: {
 									"Content-Type": "application/json",
-									"x-bot-secret": (
-										process.env.REMINDER_SECRET || ""
-									).trim(),
+									"x-bot-secret": sanitizeHeaderValue(
+										process.env.REMINDER_SECRET
+									),
 								},
 							}
 						)
@@ -1366,8 +1382,8 @@ app.post("/api/trigger-reminders", async (req, res) => {
 		const { secret, force = false, userIds = null } = req.body;
 
 		// Simple secret check (add REMINDER_SECRET to .env)
-		const expectedSecret = (process.env.REMINDER_SECRET || "").trim();
-		const providedSecret = (secret || "").trim();
+		const expectedSecret = sanitizeHeaderValue(process.env.REMINDER_SECRET);
+		const providedSecret = sanitizeHeaderValue(secret);
 		if (providedSecret !== expectedSecret) {
 			return res.status(401).json({ error: "Unauthorized" });
 		}
@@ -1403,8 +1419,8 @@ app.post("/api/send-custom-notification", async (req, res) => {
 		} = req.body;
 
 		// Secret check
-		const expectedSecret = (process.env.REMINDER_SECRET || "").trim();
-		const providedSecret = (secret || "").trim();
+		const expectedSecret = sanitizeHeaderValue(process.env.REMINDER_SECRET);
+		const providedSecret = sanitizeHeaderValue(secret);
 		if (providedSecret !== expectedSecret) {
 			return res.status(401).json({ error: "Unauthorized" });
 		}
@@ -1441,9 +1457,9 @@ app.post("/api/send-custom-notification", async (req, res) => {
 							timeout: 5000,
 							headers: {
 								"Content-Type": "application/json",
-								"x-bot-secret": (
-									process.env.REMINDER_SECRET || ""
-								).trim(),
+								"x-bot-secret": sanitizeHeaderValue(
+									process.env.REMINDER_SECRET
+								),
 							},
 						}
 					);
