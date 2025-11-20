@@ -42,14 +42,26 @@ const myAppName = "myapp";
 
 // Helper function to sanitize secret for HTTP headers
 // Removes all control characters and invalid header characters
+// Note: HTTP headers should ideally contain only ASCII characters
 function sanitizeHeaderValue(value) {
 	if (!value) return "";
-	// Remove all control characters (0x00-0x1F except TAB 0x09) and DEL (0x7F)
-	// Also remove carriage return and line feed
-	return String(value)
+	let sanitized = String(value)
 		.trim()
 		.replace(/[\x00-\x08\x0B-\x0C\x0E-\x1F\x7F]/g, "")
 		.replace(/[\r\n]/g, "");
+
+	// Check for non-ASCII characters and warn (but don't remove them)
+	// Some HTTP clients/servers may have issues with non-ASCII in headers
+	const hasNonASCII = /[^\x20-\x7E]/.test(sanitized);
+	if (hasNonASCII) {
+		console.warn(
+			`⚠️ WARNING: REMINDER_SECRET contains non-ASCII characters. This may cause issues with HTTP headers. Consider using only ASCII characters.`
+		);
+		// Try to encode as base64 for safety, but this changes the value
+		// For now, just return as-is but warn
+	}
+
+	return sanitized;
 }
 
 // Определяем режим работы бота
