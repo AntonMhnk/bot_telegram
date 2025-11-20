@@ -267,6 +267,7 @@ bot.on("message", async (msg) => {
 					// For the referrer, we don't know their language, so we'll use English for now
 					// In a real app, you'd look up the referrer's language preference from a database
 					const referrerMessage = referralMessages.en.referrer;
+					const gameUrl = "https://nebulahunt.site/";
 
 					await bot.sendMessage(referrerId, referrerMessage, {
 						reply_markup: {
@@ -274,7 +275,7 @@ bot.on("message", async (msg) => {
 								[
 									{
 										text: buttonTexts.en.openGame,
-										url: `https://t.me/${botUsername}/${myAppName}`,
+										web_app: { url: gameUrl },
 									},
 								],
 							],
@@ -565,13 +566,15 @@ app.post("/api/process-referral", async (req, res) => {
 
 		// Отправляем сообщение реферреру
 		try {
+			const gameUrl = "https://nebulahunt.site/";
+
 			await bot.sendMessage(referrerId, referrerMessage, {
 				reply_markup: {
 					inline_keyboard: [
 						[
 							{
 								text: buttonText,
-								url: `https://t.me/${botUsername}/${myAppName}`,
+								web_app: { url: gameUrl },
 							},
 						],
 					],
