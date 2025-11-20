@@ -1034,7 +1034,7 @@ async function sendReminderNotification(userId, username, language = "en") {
 		};
 
 		const msg = messages[language] || messages.en;
-		const gameUrl = `https://t.me/${botUsername}/${myAppName}`;
+		const gameUrl = "https://nebulahunt.site/";
 
 		await bot.sendMessage(userId, msg.text, {
 			parse_mode: "HTML",
@@ -1043,7 +1043,7 @@ async function sendReminderNotification(userId, username, language = "en") {
 					[
 						{
 							text: msg.button,
-							url: gameUrl,
+							web_app: { url: gameUrl },
 						},
 					],
 				],
@@ -1140,9 +1140,9 @@ async function checkAndSendReminders() {
 }
 
 // Schedule reminder checks
-// Run twice a day: at 10:00 and 18:00 (server time)
+// ⚠️ TESTING: Running every minute (change back to "0 10,18 * * *" for production!)
 cron.schedule(
-	"0 10,18 * * *",
+	"* * * * *",
 	() => {
 		console.log("🕐 Cron job triggered: Checking for inactive users...");
 		checkAndSendReminders();
@@ -1152,7 +1152,7 @@ cron.schedule(
 	}
 );
 
-console.log("✅ Daily reminder cron job scheduled (10:00 and 18:00 UTC)");
+console.log("✅ Daily reminder cron job scheduled (TESTING: every minute)");
 
 // Manual trigger endpoint for testing (protected by simple auth)
 app.post("/api/trigger-reminders", async (req, res) => {
