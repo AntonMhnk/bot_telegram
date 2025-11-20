@@ -1043,7 +1043,7 @@ async function sendReminderNotification(userId, username, language = "en") {
 					[
 						{
 							text: msg.button,
-							web_app: { url: gameUrl },
+							url: gameUrl,
 						},
 					],
 				],
