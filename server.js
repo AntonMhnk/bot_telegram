@@ -1064,7 +1064,7 @@ async function sendCustomNotification(
 		}
 
 		await bot.sendMessage(userId, message, {
-			parse_mode: "HTML",
+			// No parse_mode - plain text with line breaks and emojis
 			reply_markup:
 				inlineKeyboard.length > 0
 					? { inline_keyboard: inlineKeyboard }
@@ -1178,7 +1178,7 @@ async function sendRemindersForced(userIds = null) {
 				timeout: 30000,
 				headers: {
 					"Content-Type": "application/json",
-					"x-bot-secret": process.env.REMINDER_SECRET,
+					"x-bot-secret": (process.env.REMINDER_SECRET || "").trim(),
 				},
 			});
 			users = response.data.users || [];
@@ -1218,7 +1218,9 @@ async function sendRemindersForced(userIds = null) {
 								timeout: 5000,
 								headers: {
 									"Content-Type": "application/json",
-									"x-bot-secret": process.env.REMINDER_SECRET,
+									"x-bot-secret": (
+										process.env.REMINDER_SECRET || ""
+									).trim(),
 								},
 							}
 						)
@@ -1307,7 +1309,9 @@ async function checkAndSendReminders() {
 								timeout: 5000,
 								headers: {
 									"Content-Type": "application/json",
-									"x-bot-secret": process.env.REMINDER_SECRET,
+									"x-bot-secret": (
+										process.env.REMINDER_SECRET || ""
+									).trim(),
 								},
 							}
 						)
@@ -1362,7 +1366,9 @@ app.post("/api/trigger-reminders", async (req, res) => {
 		const { secret, force = false, userIds = null } = req.body;
 
 		// Simple secret check (add REMINDER_SECRET to .env)
-		if (secret !== process.env.REMINDER_SECRET) {
+		const expectedSecret = (process.env.REMINDER_SECRET || "").trim();
+		const providedSecret = (secret || "").trim();
+		if (providedSecret !== expectedSecret) {
 			return res.status(401).json({ error: "Unauthorized" });
 		}
 
@@ -1397,7 +1403,9 @@ app.post("/api/send-custom-notification", async (req, res) => {
 		} = req.body;
 
 		// Secret check
-		if (secret !== process.env.REMINDER_SECRET) {
+		const expectedSecret = (process.env.REMINDER_SECRET || "").trim();
+		const providedSecret = (secret || "").trim();
+		if (providedSecret !== expectedSecret) {
 			return res.status(401).json({ error: "Unauthorized" });
 		}
 
@@ -1433,7 +1441,9 @@ app.post("/api/send-custom-notification", async (req, res) => {
 							timeout: 5000,
 							headers: {
 								"Content-Type": "application/json",
-								"x-bot-secret": process.env.REMINDER_SECRET,
+								"x-bot-secret": (
+									process.env.REMINDER_SECRET || ""
+								).trim(),
 							},
 						}
 					);
