@@ -13,12 +13,23 @@ if (typeof fetch === "undefined") {
 
 const app = express();
 
-// Configure CORS with more detailed options
+// Configure CORS with explicit options
 app.use(
 	cors({
-		origin: "*", // Allow all origins
-		methods: ["GET", "POST", "OPTIONS"],
-		allowedHeaders: ["Content-Type"],
+		origin: function (origin, callback) {
+			// Allow requests with no origin (like server-to-server)
+			if (!origin) {
+				return callback(null, true);
+			}
+			// Allow all origins for now (bot is server-side)
+			callback(null, true);
+		},
+		methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+		allowedHeaders: ["Content-Type", "Authorization", "x-telegram-init-data"],
+		credentials: true,
+		maxAge: 86400,
+		preflightContinue: false,
+		optionsSuccessStatus: 204,
 	})
 );
 app.use(bodyParser.json());
