@@ -1212,7 +1212,7 @@ async function sendRemindersForced(userIds = null) {
 							`${API_URL}/users/update-reminder-time`,
 							{
 								userId: user.id,
-								secret: process.env.REMINDER_SECRET,
+								secret: (process.env.REMINDER_SECRET || "").trim(),
 							},
 							{
 								timeout: 5000,
@@ -1270,7 +1270,7 @@ async function checkAndSendReminders() {
 			timeout: 30000,
 			headers: {
 				"Content-Type": "application/json",
-				"x-bot-secret": process.env.REMINDER_SECRET,
+				"x-bot-secret": (process.env.REMINDER_SECRET || "").trim(),
 			},
 		});
 
@@ -1303,7 +1303,7 @@ async function checkAndSendReminders() {
 							`${API_URL}/users/update-reminder-time`,
 							{
 								userId: user.id,
-								secret: process.env.REMINDER_SECRET,
+								secret: (process.env.REMINDER_SECRET || "").trim(),
 							},
 							{
 								timeout: 5000,
