@@ -1140,9 +1140,9 @@ async function checkAndSendReminders() {
 }
 
 // Schedule reminder checks
-// ⚠️ TESTING: Running every minute (change back to "0 10,18 * * *" for production!)
+// Run twice a day: at 10:00 and 18:00 (server time)
 cron.schedule(
-	"* * * * *",
+	"0 10,18 * * *",
 	() => {
 		console.log("🕐 Cron job triggered: Checking for inactive users...");
 		checkAndSendReminders();
@@ -1152,7 +1152,7 @@ cron.schedule(
 	}
 );
 
-console.log("✅ Daily reminder cron job scheduled (TESTING: every minute)");
+console.log("✅ Daily reminder cron job scheduled (10:00 and 18:00 UTC)");
 
 // Manual trigger endpoint for testing (protected by simple auth)
 app.post("/api/trigger-reminders", async (req, res) => {
