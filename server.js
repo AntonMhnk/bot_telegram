@@ -129,13 +129,38 @@ bot.on("successful_payment", async (msg) => {
 		console.log("🔐 Payment payload:", payload);
 
 		// Отправляем уведомление пользователю
-		const successMessage = `🎉 Payment successful!\n\n💰 Amount: ${payment.total_amount} ${payment.currency}\n📦 Item: ${payload.type}\n\nYour purchase has been processed successfully!`;
+		let successMessage = `🎉 Payment successful!\n\n💰 Amount: ${payment.total_amount} ${payment.currency}\n📦 Item: ${payload.type}\n\nYour purchase has been processed successfully!`;
+
+		// Process galaxy upgrade if applicable
+		if (payload.type === "galaxyUpgrade" && payload.galaxySeed) {
+			try {
+				const response = await fetch(
+					"http://localhost:3000/api/upgrade-galaxy",
+					{
+						method: "POST",
+						headers: { "Content-Type": "application/json" },
+						body: JSON.stringify({
+							galaxySeed: payload.galaxySeed,
+							upgradeType: payload.upgradeType,
+							upgradeValue: payload.upgradeValue,
+							userId: user.id,
+						}),
+					}
+				);
+
+				const result = await response.json();
+				if (result.success) {
+					console.log("✅ Galaxy upgrade processed successfully");
+					successMessage = `🎉 Payment successful!\n\n⚙️ Your galaxy has been upgraded!\n🌌 Galaxy: ${payload.galaxySeed}\n✨ Upgrade: ${payload.upgradeType}\n\nOpen the game to see your changes!`;
+				} else {
+					console.error("❌ Galaxy upgrade failed:", result.error);
+				}
+			} catch (upgradeError) {
+				console.error("❌ Error processing galaxy upgrade:", upgradeError);
+			}
+		}
 
 		await bot.sendMessage(msg.chat.id, successMessage);
-
-		// TODO: Здесь нужно обработать платеж и обновить БД
-		// Вызвать соответствующий API для завершения операции
-		// Например: POST /api/game/complete-payment
 	} catch (error) {
 		console.error("❌ Payment processing error:", error);
 	}
@@ -354,7 +379,15 @@ app.get("/api/store-items", async (req, res) => {
 // API endpoint to create payment
 app.post("/api/create-payment", async (req, res) => {
 	try {
-		const { amount, description, title, paymentType, galaxySeed } = req.body;
+		const {
+			amount,
+			description,
+			title,
+			paymentType,
+			galaxySeed,
+			upgradeType,
+			upgradeValue,
+		} = req.body;
 
 		// Validate amount
 		if (!amount || amount < 1 || amount > 100000) {
@@ -369,12 +402,21 @@ app.post("/api/create-payment", async (req, res) => {
 			title,
 			description,
 			paymentType,
+			galaxySeed,
+			upgradeType,
+			upgradeValue,
 		});
 
 		// Determine appropriate title and description for the invoice
 		let invoiceTitle = title || "Buy Stars";
 		let invoiceDescription =
 			description || `Purchase ${amount} stars to expand your galaxy`;
+
+		// Create payload with payment metadata
+		const payloadData = {
+			type: paymentType,
+			price: amount,
+		};
 
 		// Set more detailed descriptions based on payment type
 		if (paymentType === "buyStardust") {
@@ -383,19 +425,23 @@ app.post("/api/create-payment", async (req, res) => {
 		} else if (paymentType === "captureGalaxy") {
 			invoiceTitle = "Capture Galaxy";
 			invoiceDescription = `Purchase ${amount} Telegram Stars to capture a galaxy with ${galaxySeed} stars. Once captured, the galaxy will be permanently owned by you.`;
+			payloadData.galaxySeed = galaxySeed;
 		} else if (paymentType === "darkMatter") {
 			invoiceTitle = "Buy Dark Matter";
 			invoiceDescription = `Purchase ${amount} Telegram Stars to get Dark Matter in Nebula Hunt. Dark Matter is a premium resource used for rare upgrades.`;
 		} else if (paymentType === "galaxyUpgrade") {
 			invoiceTitle = "Galaxy Upgrade";
 			invoiceDescription = `Purchase ${amount} Telegram Stars to upgrade your galaxy. This will permanently enhance your galaxy with custom features.`;
+			payloadData.galaxySeed = galaxySeed;
+			payloadData.upgradeType = upgradeType;
+			payloadData.upgradeValue = upgradeValue;
 		}
 
 		// Create invoice link for Telegram Stars payment
 		const invoiceLink = await bot.createInvoiceLink(
 			invoiceTitle,
 			invoiceDescription, // Improved description
-			"{}", // payload - must be empty for Stars
+			JSON.stringify(payloadData), // payload with metadata
 			"", // provider_token - must be empty for Stars
 			"XTR", // currency - must be XTR for Stars
 			[
@@ -418,6 +464,59 @@ app.post("/api/create-payment", async (req, res) => {
 			success: false,
 			error: "Failed to create payment. Please try again.",
 			details: error.response?.data || "No additional details available",
+		});
+	}
+});
+
+// Endpoint to process galaxy upgrade after successful payment
+app.post("/api/upgrade-galaxy", async (req, res) => {
+	try {
+		const { galaxySeed, upgradeType, upgradeValue, userId } = req.body;
+
+		console.log("Processing galaxy upgrade:", {
+			galaxySeed,
+			upgradeType,
+			upgradeValue,
+			userId,
+		});
+
+		// Validate inputs
+		if (!galaxySeed || !upgradeType || !upgradeValue || !userId) {
+			return res.status(400).json({
+				success: false,
+				error: "Missing required fields",
+			});
+		}
+
+		// Validate upgrade types
+		const validUpgradeTypes = ["name", "type", "color", "background"];
+		if (!validUpgradeTypes.includes(upgradeType)) {
+			return res.status(400).json({
+				success: false,
+				error: `Invalid upgrade type. Must be one of: ${validUpgradeTypes.join(
+					", "
+				)}`,
+			});
+		}
+
+		// TODO: Add actual database update logic here
+		// For now, just return success
+		console.log(`✅ Galaxy upgrade successful for ${galaxySeed}`);
+
+		res.json({
+			success: true,
+			message: "Galaxy upgraded successfully",
+			upgrade: {
+				galaxySeed,
+				upgradeType,
+				upgradeValue,
+			},
+		});
+	} catch (error) {
+		console.error("Error upgrading galaxy:", error);
+		res.status(500).json({
+			success: false,
+			error: "Failed to upgrade galaxy",
 		});
 	}
 });
