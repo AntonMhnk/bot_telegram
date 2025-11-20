@@ -1284,7 +1284,7 @@ async function checkAndSendReminders() {
 			timeout: 30000,
 			headers: {
 				"Content-Type": "application/json",
-				"x-bot-secret": (process.env.REMINDER_SECRET || "").trim(),
+				"x-bot-secret": sanitizeHeaderValue(process.env.REMINDER_SECRET),
 			},
 		});
 
