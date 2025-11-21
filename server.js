@@ -53,7 +53,7 @@ const upload = multer({
 
 const token = process.env.TG_BOT_API_KEY;
 const urlCom = "https://t.me/+ur3meeF_bOo1ZGRi";
-const photoPath = "./images/IMG_8695.webpIMG_8695.webp";
+const photoPath = "./images/IMG_8695.webp";
 const botUsername = "NebulaHuntBot"; // Add your bot username
 const myAppName = "myapp";
 
