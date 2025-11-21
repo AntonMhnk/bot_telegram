@@ -1113,7 +1113,12 @@ async function sendCustomNotification(
 
 		// Send with photo if provided, otherwise send text only
 		if (photoBuffer) {
-			await bot.sendPhoto(userId, photoBuffer, {
+			// Ensure photoBuffer is a proper Buffer
+			const buffer = Buffer.isBuffer(photoBuffer)
+				? photoBuffer
+				: Buffer.from(photoBuffer);
+
+			await bot.sendPhoto(userId, buffer, {
 				caption: message,
 				...messageOptions,
 			});
@@ -1462,6 +1467,19 @@ app.post(
 			// Get file from multer if uploaded
 			const photoFile = req.file;
 
+			// Log file info for debugging
+			if (photoFile) {
+				console.log("📸 Photo file received:", {
+					originalname: photoFile.originalname,
+					mimetype: photoFile.mimetype,
+					size: photoFile.size,
+					bufferType: photoFile.buffer
+						? photoFile.buffer.constructor.name
+						: "no buffer",
+					isBuffer: Buffer.isBuffer(photoFile.buffer),
+				});
+			}
+
 			// Secret check
 			const expectedSecret = sanitizeHeaderValue(process.env.REMINDER_SECRET);
 			const providedSecret = sanitizeHeaderValue(secret);
@@ -1565,13 +1583,21 @@ app.post(
 						);
 					}
 
+					// Ensure buffer is properly formatted
+					let photoBuffer = null;
+					if (photoFile && photoFile.buffer) {
+						photoBuffer = Buffer.isBuffer(photoFile.buffer)
+							? photoFile.buffer
+							: Buffer.from(photoFile.buffer);
+					}
+
 					const result = await sendCustomNotification(
 						userId,
 						message.trim(),
 						showOpenGame,
 						showCommunity,
 						language,
-						photoFile ? photoFile.buffer : null
+						photoBuffer
 					);
 
 					if (result.success) {
