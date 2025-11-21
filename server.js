@@ -2,6 +2,7 @@ require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
 const bodyParser = require("body-parser");
+const multer = require("multer");
 const TelegramBot = require("node-telegram-bot-api");
 const cron = require("node-cron");
 const axios = require("axios");
@@ -33,6 +34,22 @@ app.use(
 	})
 );
 app.use(bodyParser.json());
+
+// Configure multer for file uploads (memory storage)
+const upload = multer({
+	storage: multer.memoryStorage(),
+	limits: {
+		fileSize: 10 * 1024 * 1024, // 10MB limit
+	},
+	fileFilter: (req, file, cb) => {
+		// Accept only image files
+		if (file.mimetype.startsWith("image/")) {
+			cb(null, true);
+		} else {
+			cb(new Error("Only image files are allowed"), false);
+		}
+	},
+});
 
 const token = process.env.TG_BOT_API_KEY;
 const urlCom = "https://t.me/+ur3meeF_bOo1ZGRi";
@@ -1046,7 +1063,7 @@ app.post(
  * @param {boolean} showOpenGameButton - Show "Open Game" button
  * @param {boolean} showCommunityButton - Show "Community" button
  * @param {string} language - User language (en/ru)
- * @param {string} photoUrl - Optional photo URL to attach
+ * @param {Buffer} photoBuffer - Optional photo buffer to attach
  */
 async function sendCustomNotification(
 	userId,
@@ -1054,7 +1071,7 @@ async function sendCustomNotification(
 	showOpenGameButton = false,
 	showCommunityButton = false,
 	language = "en",
-	photoUrl = null
+	photoBuffer = null
 ) {
 	try {
 		console.log(`📬 Sending custom notification to user ${userId}`);
@@ -1095,8 +1112,8 @@ async function sendCustomNotification(
 		};
 
 		// Send with photo if provided, otherwise send text only
-		if (photoUrl) {
-			await bot.sendPhoto(userId, photoUrl, {
+		if (photoBuffer) {
+			await bot.sendPhoto(userId, photoBuffer, {
 				caption: message,
 				...messageOptions,
 			});
@@ -1429,54 +1446,81 @@ app.post("/api/trigger-reminders", async (req, res) => {
 });
 
 // Custom notification endpoint
-app.post("/api/send-custom-notification", async (req, res) => {
-	try {
-		const {
-			secret,
-			message,
-			userIds,
-			showOpenGameButton = false,
-			showCommunityButton = false,
-			photoUrl = null,
-		} = req.body;
+app.post(
+	"/api/send-custom-notification",
+	upload.single("photo"),
+	async (req, res) => {
+		try {
+			const {
+				secret,
+				message,
+				userIds,
+				showOpenGameButton,
+				showCommunityButton,
+			} = req.body;
 
-		// Secret check
-		const expectedSecret = sanitizeHeaderValue(process.env.REMINDER_SECRET);
-		const providedSecret = sanitizeHeaderValue(secret);
-		if (providedSecret !== expectedSecret) {
-			return res.status(401).json({ error: "Unauthorized" });
-		}
+			// Get file from multer if uploaded
+			const photoFile = req.file;
 
-		if (!message || !message.trim()) {
-			return res.status(400).json({ error: "Message is required" });
-		}
+			// Secret check
+			const expectedSecret = sanitizeHeaderValue(process.env.REMINDER_SECRET);
+			const providedSecret = sanitizeHeaderValue(secret);
+			if (providedSecret !== expectedSecret) {
+				return res.status(401).json({ error: "Unauthorized" });
+			}
 
-		if (!userIds || !Array.isArray(userIds) || userIds.length === 0) {
-			return res
-				.status(400)
-				.json({ error: "User IDs array is required and must not be empty" });
-		}
+			if (!message || !message.trim()) {
+				return res.status(400).json({ error: "Message is required" });
+			}
 
-		console.log("\n📨 ========== SEND CUSTOM NOTIFICATION ==========");
-		console.log(`💬 Message: ${message}`);
-		console.log(`👥 User IDs: ${userIds.length} users`);
-		console.log(`🎮 Open Game button: ${showOpenGameButton}`);
-		console.log(`💬 Community button: ${showCommunityButton}`);
-
-		const API_URL = process.env.API_URL || "https://nebulahunt.site/api";
-		let sentCount = 0;
-		let failedCount = 0;
-
-		// Send to each user
-		for (const userId of userIds) {
-			try {
-				// Get user language from API
-				let language = "en";
+			// Parse userIds if it's a JSON string (from FormData)
+			let parsedUserIds = userIds;
+			if (typeof userIds === "string") {
 				try {
-					const userResponse = await axios.get(
-						`${API_URL}/users/${userId}`,
+					parsedUserIds = JSON.parse(userIds);
+				} catch (e) {
+					// If parsing fails, treat as null (send to all)
+					parsedUserIds = null;
+				}
+			}
+
+			// Convert string booleans from FormData to actual booleans
+			const showOpenGame =
+				showOpenGameButton === true || showOpenGameButton === "true";
+			const showCommunity =
+				showCommunityButton === true || showCommunityButton === "true";
+
+			if (
+				parsedUserIds !== null &&
+				(!Array.isArray(parsedUserIds) || parsedUserIds.length === 0)
+			) {
+				return res.status(400).json({
+					error: "User IDs must be null (for all users) or a non-empty array",
+				});
+			}
+
+			console.log("\n📨 ========== SEND CUSTOM NOTIFICATION ==========");
+			console.log(`💬 Message: ${message}`);
+			console.log(
+				`👥 User IDs: ${
+					parsedUserIds === null ? "ALL USERS" : parsedUserIds.length
+				} users`
+			);
+			console.log(`🎮 Open Game button: ${showOpenGame}`);
+			console.log(`💬 Community button: ${showCommunity}`);
+
+			const API_URL = process.env.API_URL || "https://nebulahunt.site/api";
+			let sentCount = 0;
+			let failedCount = 0;
+
+			// If userIds is null, get all users
+			let finalUserIds = parsedUserIds;
+			if (parsedUserIds === null) {
+				try {
+					const allUsersResponse = await axios.get(
+						`${API_URL}/users/all-for-reminders`,
 						{
-							timeout: 5000,
+							timeout: 30000,
 							headers: {
 								"Content-Type": "application/json",
 								"x-bot-secret": sanitizeHeaderValue(
@@ -1485,53 +1529,82 @@ app.post("/api/send-custom-notification", async (req, res) => {
 							},
 						}
 					);
-					language = userResponse.data?.user?.language || "en";
-				} catch (err) {
-					console.warn(
-						`⚠️ Failed to fetch user ${userId} language, using default:`,
-						err.message
+					finalUserIds = allUsersResponse.data.users.map((u) =>
+						u.id.toString()
 					);
+					console.log(`✅ Found ${finalUserIds.length} users to notify`);
+				} catch (err) {
+					console.error(`❌ Failed to fetch all users:`, err.message);
+					return res.status(500).json({ error: "Failed to fetch users" });
 				}
+			}
 
-				const result = await sendCustomNotification(
-					userId,
-					message.trim(),
-					showOpenGameButton,
-					showCommunityButton,
-					language,
-					photoUrl
-				);
+			// Send to each user
+			for (const userId of finalUserIds) {
+				try {
+					// Get user language from API
+					let language = "en";
+					try {
+						const userResponse = await axios.get(
+							`${API_URL}/users/${userId}`,
+							{
+								timeout: 5000,
+								headers: {
+									"Content-Type": "application/json",
+									"x-bot-secret": sanitizeHeaderValue(
+										process.env.REMINDER_SECRET
+									),
+								},
+							}
+						);
+						language = userResponse.data?.user?.language || "en";
+					} catch (err) {
+						console.warn(
+							`⚠️ Failed to fetch user ${userId} language, using default:`,
+							err.message
+						);
+					}
 
-				if (result.success) {
-					sentCount++;
-				} else {
+					const result = await sendCustomNotification(
+						userId,
+						message.trim(),
+						showOpenGame,
+						showCommunity,
+						language,
+						photoFile ? photoFile.buffer : null
+					);
+
+					if (result.success) {
+						sentCount++;
+					} else {
+						failedCount++;
+					}
+
+					// Delay between messages to avoid rate limits (1 second)
+					await new Promise((resolve) => setTimeout(resolve, 1000));
+				} catch (error) {
+					console.error(`❌ Error sending to ${userId}:`, error.message);
 					failedCount++;
 				}
-
-				// Delay between messages to avoid rate limits (1 second)
-				await new Promise((resolve) => setTimeout(resolve, 1000));
-			} catch (error) {
-				console.error(`❌ Error sending to ${userId}:`, error.message);
-				failedCount++;
 			}
+
+			console.log(`\n📈 Custom notification summary:`);
+			console.log(`   ✅ Sent: ${sentCount}`);
+			console.log(`   ❌ Failed: ${failedCount}`);
+			console.log("========================================\n");
+
+			res.json({
+				success: true,
+				message: "Custom notifications sent",
+				sent: sentCount,
+				failed: failedCount,
+			});
+		} catch (error) {
+			console.error("Error sending custom notifications:", error);
+			res.status(500).json({ error: error.message });
 		}
-
-		console.log(`\n📈 Custom notification summary:`);
-		console.log(`   ✅ Sent: ${sentCount}`);
-		console.log(`   ❌ Failed: ${failedCount}`);
-		console.log("========================================\n");
-
-		res.json({
-			success: true,
-			message: "Custom notifications sent",
-			sent: sentCount,
-			failed: failedCount,
-		});
-	} catch (error) {
-		console.error("Error sending custom notifications:", error);
-		res.status(500).json({ error: error.message });
 	}
-});
+);
 
 // ============================================
 
