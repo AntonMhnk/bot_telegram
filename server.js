@@ -1046,13 +1046,15 @@ app.post(
  * @param {boolean} showOpenGameButton - Show "Open Game" button
  * @param {boolean} showCommunityButton - Show "Community" button
  * @param {string} language - User language (en/ru)
+ * @param {string} photoUrl - Optional photo URL to attach
  */
 async function sendCustomNotification(
 	userId,
 	message,
 	showOpenGameButton = false,
 	showCommunityButton = false,
-	language = "en"
+	language = "en",
+	photoUrl = null
 ) {
 	try {
 		console.log(`📬 Sending custom notification to user ${userId}`);
@@ -1073,27 +1075,34 @@ async function sendCustomNotification(
 
 		const btn = buttons[language] || buttons.en;
 
-		// Build inline keyboard
+		// Build inline keyboard - buttons vertically (each in its own row)
 		const inlineKeyboard = [];
-		if (showOpenGameButton && showCommunityButton) {
-			// Both buttons in one row
-			inlineKeyboard.push([
-				{ text: btn.openGame, web_app: { url: gameUrl } },
-				{ text: btn.community, url: communityUrl },
-			]);
-		} else if (showOpenGameButton) {
+		if (showOpenGameButton) {
+			// Open Game button first (top)
 			inlineKeyboard.push([{ text: btn.openGame, web_app: { url: gameUrl } }]);
-		} else if (showCommunityButton) {
+		}
+		if (showCommunityButton) {
+			// Community button second (bottom)
 			inlineKeyboard.push([{ text: btn.community, url: communityUrl }]);
 		}
 
-		await bot.sendMessage(userId, message, {
+		const messageOptions = {
 			// No parse_mode - plain text with line breaks and emojis
 			reply_markup:
 				inlineKeyboard.length > 0
 					? { inline_keyboard: inlineKeyboard }
 					: undefined,
-		});
+		};
+
+		// Send with photo if provided, otherwise send text only
+		if (photoUrl) {
+			await bot.sendPhoto(userId, photoUrl, {
+				caption: message,
+				...messageOptions,
+			});
+		} else {
+			await bot.sendMessage(userId, message, messageOptions);
+		}
 
 		console.log(`✅ Custom notification sent successfully to ${userId}`);
 		return { success: true };
@@ -1428,6 +1437,7 @@ app.post("/api/send-custom-notification", async (req, res) => {
 			userIds,
 			showOpenGameButton = false,
 			showCommunityButton = false,
+			photoUrl = null,
 		} = req.body;
 
 		// Secret check
@@ -1488,7 +1498,8 @@ app.post("/api/send-custom-notification", async (req, res) => {
 					message.trim(),
 					showOpenGameButton,
 					showCommunityButton,
-					language
+					language,
+					photoUrl
 				);
 
 				if (result.success) {
