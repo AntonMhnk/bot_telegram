@@ -992,11 +992,13 @@ app.post(
 					// Вызываем API для завершения платежа
 					try {
 						// API_BASE_URL может быть с /api или без, проверяем
-						const baseUrl = process.env.API_BASE_URL || "https://api.nebulahunt.site";
-						const apiUrl = baseUrl.endsWith("/api") 
+						const baseUrl = (
+							process.env.API_BASE_URL || "https://api.nebulahunt.site"
+						).replace(/\/$/, ""); // Убираем trailing slash
+						const apiUrl = baseUrl.endsWith("/api")
 							? `${baseUrl}/game/complete-payment`
 							: `${baseUrl}/api/game/complete-payment`;
-						
+
 						const requestBody = {
 							payment,
 							payload,
@@ -1022,7 +1024,11 @@ app.post(
 							body: JSON.stringify(requestBody),
 						});
 
-						console.log("🔐 [BOT] API Response status:", apiResponse.status, apiResponse.statusText);
+						console.log(
+							"🔐 [BOT] API Response status:",
+							apiResponse.status,
+							apiResponse.statusText
+						);
 
 						// Читаем тело ответа даже при ошибке
 						const responseText = await apiResponse.text();
@@ -1033,8 +1039,14 @@ app.post(
 							try {
 								result = JSON.parse(responseText);
 							} catch (e) {
-								console.error("❌ Failed to parse response JSON:", e);
-								result = { success: false, error: "Invalid JSON response" };
+								console.error(
+									"❌ Failed to parse response JSON:",
+									e
+								);
+								result = {
+									success: false,
+									error: "Invalid JSON response",
+								};
 							}
 							console.log("✅ Payment completed via API:", result);
 
