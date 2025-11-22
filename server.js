@@ -94,6 +94,94 @@ if (!isProduction) {
 
 const bot = new TelegramBot(token, botOptions);
 
+// Функция для получения понятного названия предмета
+function getItemName(payload, language = "en") {
+	const translations = {
+		en: {
+			stardust: "Stardust Package",
+			darkMatter: "Dark Matter Package",
+			galaxyUpgrade: "Galaxy Upgrade",
+			galaxyCapture: "Galaxy Capture",
+			package: "Package",
+			gameObject: "Game Object",
+			unknown: "Unknown Item",
+		},
+		ru: {
+			stardust: "Пакет звездной пыли",
+			darkMatter: "Пакет темной материи",
+			galaxyUpgrade: "Улучшение галактики",
+			galaxyCapture: "Захват галактики",
+			package: "Пакет",
+			gameObject: "Игровой объект",
+			unknown: "Неизвестный предмет",
+		},
+	};
+
+	const lang = language === "ru" ? "ru" : "en";
+	// Поддерживаем как короткие ключи (t), так и полные (type)
+	const type = payload?.t || payload?.type || "unknown";
+
+	// Для улучшения галактики добавляем тип улучшения
+	if (type === "galaxyUpgrade") {
+		const upgradeType = payload?.ut || payload?.upgradeType;
+		const upgradeNames = {
+			en: {
+				name: "Galaxy Name",
+				type: "Galaxy Type",
+				color: "Color Palette",
+				background: "Background",
+			},
+			ru: {
+				name: "Название галактики",
+				type: "Тип галактики",
+				color: "Цветовая палитра",
+				background: "Фон",
+			},
+		};
+		const upgradeName =
+			upgradeNames[lang]?.[upgradeType] || upgradeNames[lang].name;
+		return `${translations[lang].galaxyUpgrade}: ${upgradeName}`;
+	}
+
+	// Для пакетов пытаемся получить название из metadata, если есть
+	if (type === "package" || type === "gameObject") {
+		const packageName = payload?.packageName || payload?.pn || null;
+		if (packageName) {
+			return packageName;
+		}
+	}
+
+	return translations[lang][type] || translations[lang].unknown;
+}
+
+// Функция для получения переведенного сообщения об успешной оплате
+function getPaymentSuccessMessage(payload, payment, language = "en") {
+	const translations = {
+		en: {
+			title: "🎉 Payment processed successfully!",
+			item: "📦 Item:",
+			amount: "💰 Amount:",
+			currency: "Telegram Stars",
+			message:
+				"Your purchase has been completed and resources have been added to your account.",
+		},
+		ru: {
+			title: "🎉 Платеж успешно обработан!",
+			item: "📦 Предмет:",
+			amount: "💰 Сумма:",
+			currency: "Telegram Stars",
+			message: "Ваша покупка завершена, и ресурсы добавлены на ваш счет.",
+		},
+	};
+
+	const lang = language === "ru" ? "ru" : "en";
+	const t = translations[lang];
+	const itemName = getItemName(payload, language);
+	const currency = payment.currency === "XTR" ? t.currency : payment.currency;
+
+	return `${t.title}\n\n${t.item} ${itemName}\n${t.amount} ${payment.total_amount} ${currency}\n\n${t.message}`;
+}
+
 // 🔐 Настройка webhook URL для платежей (только в продакшене)
 if (isProduction) {
 	const webhookUrl = `${process.env.BOT_WEBHOOK_URL}/webhook/telegram-payment`;
@@ -182,37 +270,15 @@ bot.on("successful_payment", async (msg) => {
 		const payload = JSON.parse(payment.invoice_payload);
 		console.log("🔐 Payment payload:", payload);
 
-		// Отправляем уведомление пользователю
-		let successMessage = `🎉 Payment successful!\n\n💰 Amount: ${payment.total_amount} ${payment.currency}\n📦 Item: ${payload.type}\n\nYour purchase has been processed successfully!`;
+		// Получаем язык пользователя
+		const userLanguage = user?.language_code || "en";
 
-		// Process galaxy upgrade if applicable
-		if (payload.type === "galaxyUpgrade" && payload.galaxySeed) {
-			try {
-				const response = await fetch(
-					"http://localhost:3000/api/upgrade-galaxy",
-					{
-						method: "POST",
-						headers: { "Content-Type": "application/json" },
-						body: JSON.stringify({
-							galaxySeed: payload.galaxySeed,
-							upgradeType: payload.upgradeType,
-							upgradeValue: payload.upgradeValue,
-							userId: user.id,
-						}),
-					}
-				);
-
-				const result = await response.json();
-				if (result.success) {
-					console.log("✅ Galaxy upgrade processed successfully");
-					successMessage = `🎉 Payment successful!\n\n⚙️ Your galaxy has been upgraded!\n🌌 Galaxy: ${payload.galaxySeed}\n✨ Upgrade: ${payload.upgradeType}\n\nOpen the game to see your changes!`;
-				} else {
-					console.error("❌ Galaxy upgrade failed:", result.error);
-				}
-			} catch (upgradeError) {
-				console.error("❌ Error processing galaxy upgrade:", upgradeError);
-			}
-		}
+		// Отправляем уведомление пользователю с переведенным сообщением
+		const successMessage = getPaymentSuccessMessage(
+			payload,
+			payment,
+			userLanguage
+		);
 
 		await bot.sendMessage(msg.chat.id, successMessage);
 	} catch (error) {
@@ -1051,7 +1117,12 @@ app.post(
 							console.log("✅ Payment completed via API:", result);
 
 							// Отправляем уведомление пользователю об успешном завершении
-							const successMessage = `🎉 Payment processed successfully!\n\n📦 Item: ${payload.type}\n💰 Amount: ${payment.total_amount} ${payment.currency}\n\nYour purchase has been completed and resources have been added to your account.`;
+							const userLanguage = user?.language_code || "en";
+							const successMessage = getPaymentSuccessMessage(
+								payload,
+								payment,
+								userLanguage
+							);
 							await bot.sendMessage(
 								update.message.chat.id,
 								successMessage
