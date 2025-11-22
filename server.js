@@ -991,25 +991,51 @@ app.post(
 
 					// Вызываем API для завершения платежа
 					try {
-						const apiResponse = await fetch(
-							`${
-								process.env.API_BASE_URL || "http://localhost:5000"
-							}/api/game/complete-payment`,
-							{
-								method: "POST",
-								headers: {
-									"Content-Type": "application/json",
-								},
-								body: JSON.stringify({
-									payment,
-									payload,
-									user,
-								}),
-							}
-						);
+						// API_BASE_URL может быть с /api или без, проверяем
+						const baseUrl = process.env.API_BASE_URL || "https://api.nebulahunt.site";
+						const apiUrl = baseUrl.endsWith("/api") 
+							? `${baseUrl}/game/complete-payment`
+							: `${baseUrl}/api/game/complete-payment`;
+						
+						const requestBody = {
+							payment,
+							payload,
+							user: {
+								...user,
+								id: Number(user.id), // Преобразуем в число для избежания проблем с BigInt
+							},
+						};
+
+						console.log("🔐 [BOT] Sending request to API:", {
+							url: apiUrl,
+							method: "POST",
+							body: JSON.stringify(requestBody),
+							userId: user.id,
+							paymentId: payment.telegram_payment_charge_id,
+						});
+
+						const apiResponse = await fetch(apiUrl, {
+							method: "POST",
+							headers: {
+								"Content-Type": "application/json",
+							},
+							body: JSON.stringify(requestBody),
+						});
+
+						console.log("🔐 [BOT] API Response status:", apiResponse.status, apiResponse.statusText);
+
+						// Читаем тело ответа даже при ошибке
+						const responseText = await apiResponse.text();
+						console.log("🔐 [BOT] API Response body:", responseText);
 
 						if (apiResponse.ok) {
-							const result = await apiResponse.json();
+							let result;
+							try {
+								result = JSON.parse(responseText);
+							} catch (e) {
+								console.error("❌ Failed to parse response JSON:", e);
+								result = { success: false, error: "Invalid JSON response" };
+							}
 							console.log("✅ Payment completed via API:", result);
 
 							// Отправляем уведомление пользователю об успешном завершении
@@ -1019,10 +1045,19 @@ app.post(
 								successMessage
 							);
 						} else {
+							let errorData;
+							try {
+								errorData = JSON.parse(responseText);
+							} catch (e) {
+								errorData = { message: responseText };
+							}
+
 							console.error(
 								"❌ API call failed:",
 								apiResponse.status,
-								apiResponse.statusText
+								apiResponse.statusText,
+								"Error data:",
+								errorData
 							);
 
 							// Отправляем уведомление об ошибке
