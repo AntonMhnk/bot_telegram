@@ -317,15 +317,15 @@ bot.on("message", async (msg) => {
 	const referralMessages = {
 		en: {
 			invitedUser:
-				"🎁 You were invited by a friend! Open the game to receive your welcome bonus of 5,000 Stardust and 10 Dark Matter!",
+				"🎁 You were invited by a friend! Open the game to receive your welcome bonus of 10,000 Stardust and 50 Dark Matter!",
 			referrer:
-				"🎉 Great news! Someone joined using your referral link. You have received a reward of 5,000 Stardust and 10 Dark Matter!",
+				"🎉 Great news! Someone joined using your referral link. You have received a reward of 10,000 Stardust and 50 Dark Matter!",
 		},
 		ru: {
 			invitedUser:
-				"🎁 Вас пригласил друг! Откройте игру, чтобы получить приветственный бонус в размере 5,000 Звездной пыли и 10 Темной материи!",
+				"🎁 Вас пригласил друг! Откройте игру, чтобы получить приветственный бонус в размере 10,000 Звёздной пыли и 50 Тёмной материи!",
 			referrer:
-				"🎉 Отличные новости! Кто-то присоединился по вашей реферальной ссылке. Вы получили награду: 5,000 звездной пыли и 10 темной материи!",
+				"🎉 Отличные новости! Кто-то присоединился по вашей реферальной ссылке. Вы получили награду: 10,000 звёздной пыли и 50 тёмной материи!",
 		},
 	};
 
@@ -675,12 +675,12 @@ app.post("/api/process-referral", async (req, res) => {
 		if (userLanguage === "ru") {
 			// Русская версия сообщения
 			referrerMessage =
-				"🎉 Отличные новости! Кто-то присоединился по вашей реферальной ссылке. Вы получили награду: 5,000 звездной пыли и 10 темной материи!";
+				"🎉 Отличные новости! Кто-то присоединился по вашей реферальной ссылке. Вы получили награду: 10,000 звёздной пыли и 50 тёмной материи!";
 			buttonText = "🪐 Открыть игру";
 		} else {
 			// Английская версия сообщения (по умолчанию)
 			referrerMessage =
-				"🎉 Great news! Someone joined using your referral link. You have received a reward of 5,000 Stardust and 10 Dark Matter!";
+				"🎉 Great news! Someone joined using your referral link. You have received a reward of 10,000 Stardust and 50 Dark Matter!";
 			buttonText = "🪐 Open Game";
 		}
 
